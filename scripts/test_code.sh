@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 module="gpssm"
+NO_DATASET=${1:run_all}
+
 declare -a extras=()  # "experiments" "ploters" "runners")
 
 get_script_dir () {
@@ -46,4 +48,11 @@ done
 
 # Run unit tests
 echo -e "${GREEN}Running unit tests.${NC}"
-pytest $module || { exit 1; }
+
+if [ $# -ge 1 ]
+then
+    ignore_dir=$1
+else
+    ignore_dir=""
+fi
+pytest $module --ignore=$ignore_dir || { exit 1; }

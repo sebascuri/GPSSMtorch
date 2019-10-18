@@ -37,7 +37,7 @@ class Dataset(data.TensorDataset):
 
     def __init__(self, outputs: np.ndarray,
                  inputs: np.ndarray = None, states: np.ndarray = None,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
 
         assert outputs.ndim == 3, 'Outputs shape is [n_experiment, time, dim]'
         self.num_experiments, self.experiment_length, self.dim_outputs = outputs.shape
@@ -106,7 +106,7 @@ class Actuator(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'actuator.mat'))
 
         inputs = get_data_split(raw_data['u'][np.newaxis], train=train)
@@ -148,7 +148,7 @@ class BallBeam(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'ballbeam.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -188,7 +188,7 @@ class Drive(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'drive.mat'))
 
         inputs = get_data_split(
@@ -231,7 +231,7 @@ class Dryer(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'dryer.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -272,7 +272,7 @@ class Flutter(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'flutter.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -312,7 +312,7 @@ class GasFurnace(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'gas_furnace.csv'),
                               skiprows=1, delimiter=',')
 
@@ -353,7 +353,7 @@ class Tank(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'tank.mat'))
 
         inputs = get_data_split(raw_data['u'].T[np.newaxis], train=train)
@@ -393,7 +393,7 @@ class Sarcos(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'sarcos_inv.mat'))
         raw_data = raw_data['sarcos_inv']
 
@@ -439,7 +439,7 @@ class NonLinearSpring(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'spring_nonlinear.mat'))
 
         inputs = get_data_split(raw_data['ds_u'][np.newaxis], train=train)
@@ -476,7 +476,7 @@ class RoboMove(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'robomove.mat'))
         split_idx = 25000
 
@@ -514,7 +514,7 @@ class RoboMoveSimple(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1):
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'robomove_simple.mat'))
         split_idx = 25000
 
@@ -566,7 +566,7 @@ class KinkFunction(Dataset):
         Standard deviation of observation noise.
 
     References
-    ---------
+    ----------
     Ialongo, A. D., Van Der Wilk, M., Hensman, J., & Rasmussen, C. E. (2019, May).
     Overcoming Mean-Field Approximations in Recurrent Gaussian Process Models.
     In International Conference on Machine Learning (pp. 2931-2940).
@@ -577,15 +577,15 @@ class KinkFunction(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1,
                  trajectory_length: int = 120, x0: float = 0.5,
                  process_noise_sd: float = 0.05,
-                 observation_noise_sd: float = np.sqrt(0.8)):
+                 observation_noise_sd: float = np.sqrt(0.8)) -> None:
 
         file_name = os.path.join(data_dir, 'kink_function.mat')
         if not os.path.exists(file_name):
-            def f(x, _):
+            def f(x: np.ndarray, _: np.ndarray) -> np.ndarray:
                 """Kink transition function."""
                 return 0.8 + (x + 0.2) * (1 - 5 / (1 + np.exp(- 2 * x)))
 
-            def g(x, _):
+            def g(x: np.ndarray, _: np.ndarray) -> np.ndarray:
                 """Kink observation function."""
                 return x
 

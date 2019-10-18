@@ -5,7 +5,8 @@ import numpy as np
 DTYPE = np.float64
 
 
-def get_data_split(array: np.ndarray, split_idx: int = None, train: bool = True):
+def get_data_split(array: np.ndarray, split_idx: int = None, train: bool = True
+                   ) -> np.ndarray:
     """Get data split by index.
 
     Parameters
@@ -39,7 +40,8 @@ def get_data_split(array: np.ndarray, split_idx: int = None, train: bool = True)
     return array.astype(DTYPE)
 
 
-def generate_batches(array: np.ndarray, sequence_length: int, stride_length: int):
+def generate_batches(array: np.ndarray, sequence_length: int, stride_length: int
+                     ) -> np.ndarray:
     """Generate batches from an array.
 
     An array has size [n_experiment, time, dim] and it returns an array of size
@@ -61,8 +63,10 @@ def generate_batches(array: np.ndarray, sequence_length: int, stride_length: int
     ----------
     array: np.ndarray.
         array to reshape of shape [n_experiment, time, dim].
+
     sequence_length: int.
         length of batch sequence.
+
     stride_length: int.
         down-sampling rate of array.
 
@@ -71,11 +75,6 @@ def generate_batches(array: np.ndarray, sequence_length: int, stride_length: int
     array: np.ndarray.
         reshaped array  of size [n_sub_sequences, sequence_length, dim].
 
-
-    Returns
-    -------
-    array: np.ndarray.
-        reshaped array  of size [n_sub_sequences, sequence_length, dim].
     """
     assert array.ndim == 3, "array must have shape [n_experiment, time, dim]"
     trajectory_length = array.shape[1]
@@ -99,49 +98,49 @@ def generate_trajectory(transition_function: callable, observation_function: cal
                         inputs: np.ndarray = None, trajectory_length: int = 120,
                         x0: np.ndarray = np.array(0.5),
                         process_noise_sd: np.ndarray = np.array(0.05),
-                        observation_noise_sd: np.ndarray = np.array(np.sqrt(0.8))):
-    """Generate a trajectory. 
-    
+                        observation_noise_sd: np.ndarray = np.array(np.sqrt(0.8))
+                        ) -> (np.ndarray, np.ndarray):
+    """Generate a trajectory.
+
     The trajectory is generated as:
             x_{k+1} = f(x_k, u_k) + process_noise
             y_k = g(x_k, u_k) + observation_noise
 
     where f() and g() are the transition and observation functions, respectively.
-    
+
     Parameters
     ----------
     transition_function: callable.
         Function that accepts (state, input) and returns (next_state).
-        
+
     observation_function: callable.
-        Function that accepts (state, input) and returns (observation). 
-        
+        Function that accepts (state, input) and returns (observation).
+
     inputs: np.ndarray, optional (default: None).
-        Sequence of inputs to apply. 
-        If not None, it has to be longer than the trajectory length. 
-        
+        Sequence of inputs to apply.
+        If not None, it has to be longer than the trajectory length.
+
     trajectory_length: optional (default: 120).
-        Length of trajectory to simulate. 
-        
-    x0: np.ndarray, optional (default: np.array(0.5))
-        Initial state. The state dimension is inferred from here. 
-        
+        Length of trajectory to simulate.
+
+    x0: np.ndarray, optional (default: np.array(0.5)).
+        Initial state. The state dimension is inferred from here.
+
     process_noise_sd: np.ndarray, optional (default: np.array(0.05)).
-        Standard deviation of the process noise [state_dim x state_dim]. 
-        
-    observation_noise_sd: np.ndarray, optional (default: np.array(0.8)). 
-        Standard deviation of the observation noise [output_dim x output_dim]. 
-        
+        Standard deviation of the process noise [state_dim x state_dim].
+
+    observation_noise_sd: np.ndarray, optional (default: np.array(0.8)).
+        Standard deviation of the observation noise [output_dim x output_dim].
+
     Returns
     -------
     states: np.ndarray.
         Array of states [trajectory_length x state_dim].
-    
-    outputs: np.ndarray. 
-        Array of outputs [trajectory_length x output_dim]. 
+
+    outputs: np.ndarray.
+        Array of outputs [trajectory_length x output_dim].
 
     """
-
     states = []
     outputs = []
     state = x0
@@ -171,27 +170,28 @@ class Normalizer(object):
     """Normalizer Transformation for data sets.
 
     Parameters
-    ---------
+    ----------
     array: np.ndarray.
-        Array with dimensions [n_sequences x sequence_length x dimension]
+        Array with dimensions [n_sequences x sequence_length x dimension].
     """
-    def __init__(self, array: np.ndarray):
+
+    def __init__(self, array: np.ndarray) -> None:
         assert array.ndim == 3, """Array must have 3 dimensions"""
         dim = array.shape[2]
 
         self.mean = np.mean(array, axis=(0, 1))
         self.sd = np.std(array, axis=(0, 1))
 
-        if np.all(self.sd == 0.): # This is for constant sequences.
+        if np.all(self.sd == 0.):  # This is for constant sequences.
             self.sd = np.ones((dim, ))
 
         assert self.mean.shape == (dim,)
         assert self.sd.shape == (dim,)
 
-    def __call__(self, data):
+    def __call__(self, data: np.ndarray) -> np.ndarray:
         """Transform data."""
         return (data - self.mean) / self.sd
 
-    def inverse(self, data):
+    def inverse(self, data: np.ndarray) -> np.ndarray:
         """Inverse transformation."""
         return self.mean + data * self.sd
