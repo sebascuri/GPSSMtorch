@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
 module="gpssm"
-NO_DATASET=${1:run_all}
-
 declare -a extras=()  # "experiments" "ploters" "runners")
 
 get_script_dir () {
@@ -20,7 +18,7 @@ get_script_dir () {
 }
 
 # Change to script root
-cd $(get_script_dir)/..
+cd "$(get_script_dir)"/.. || { exit 1; }
 GREEN='\033[0;32m'
 NC='\033[0m'
 
