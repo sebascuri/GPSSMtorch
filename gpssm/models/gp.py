@@ -1,20 +1,36 @@
 """Implementation of GP Models."""
 
-import gpytorch
 import torch
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.likelihoods import Likelihood
 from gpytorch.means import Mean
 from gpytorch.kernels import Kernel
-from gpytorch.models import AbstractVariationalGP
+from gpytorch.models import AbstractVariationalGP, ExactGP
 from gpytorch.variational import CholeskyVariationalDistribution
 from gpytorch.variational import VariationalStrategy
 
 __author__ = 'Sebastian Curi'
-__all__ = ['ExactGPModel', 'VariationalGP']
+__all__ = ['GPSSM', 'ExactGPModel', 'VariationalGP']
 
 
-class ExactGPModel(gpytorch.models.ExactGP):
+class GPSSM(object):
+    """GPSSM's are GPs defined in different outputs.
+
+    Parameters
+    ----------
+    num_outputs: int.
+        Number of outputs the GP-SSM is modeling.
+    """
+
+    def __init__(self, num_outputs):
+        self.num_outputs = num_outputs
+
+    def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
+        """Call a GP-SSM at a given state-input pair."""
+        raise NotImplementedError
+
+
+class ExactGPModel(GPSSM, ExactGP):
     """An Exact GP Model implementation.
 
     Exact GP Models require that all states are measured and the dimension of y and x
@@ -41,31 +57,40 @@ class ExactGPModel(gpytorch.models.ExactGP):
 
     Examples
     --------
+    >>> import torch
+    >>> from gpssm.models.gp import ExactGPModel
     >>> from gpytorch.means import ConstantMean
     >>> from gpytorch.kernels import ScaleKernel, RBFKernel
     >>> from gpytorch.likelihoods import GaussianLikelihood
     >>> from gpytorch.mlls import ExactMarginalLogLikelihood
-    >>> import torch.testing
-    >>> xu = torch.randn((64, 3))
+    >>> from torch import Size
+    >>> from torch.testing import assert_allclose
+    >>> num_particles = 32
     >>> dim_x, dim_u = 2, 1
+    >>> dim_xu = dim_x + dim_u
     >>> dim_y = dim_x
-    >>> y1 = (torch.sin(xu[:, 0]) + 2 * xu[:, 2] - xu[:, 1] ** 2).unsqueeze(dim=1)
-    >>> y2 = (torch.cos(xu[:, 0]) - 2 * xu[:, 2] ** 2 + xu[:, 1]).unsqueeze(dim=1)
-    >>> y = torch.cat((y1, y2), dim=-1) + 0.1 * torch.randn((64, 2))
-    >>> y = y.t()
-    >>> likelihood = GaussianLikelihood(batch_size=dim_x)
-    >>> mean = ConstantMean(batch_size=dim_x)
-    >>> kernel = ScaleKernel(RBFKernel(batch_size=dim_x), batch_size=dim_x)
-    >>> train_xu, test_xu = xu[:32], xu[32:]
-    >>> train_y, test_y = y[:, :32], y[:, 32:]
+    >>> shape = Size([dim_y])
+    >>> xu = torch.randn((num_particles, dim_xu))
+    >>> assert_allclose(xu.shape, Size([num_particles, dim_xu]))
+    >>> y1 = (torch.sin(xu[:, 0]) + 2 * xu[:, 2] - xu[:, 1] ** 2)
+    >>> y2 = (torch.cos(xu[:, 0]) - 2 * xu[:, 2] ** 2 + xu[:, 1])
+    >>> y = torch.cat((y1.unsqueeze(-1), y2.unsqueeze(-1)), dim=-1)
+    >>> y += 0.1 * torch.randn((num_particles, dim_y))
+    >>> y = y.permute(-1, 0)
+    >>> likelihood = GaussianLikelihood(batch_shape=shape)
+    >>> mean = ConstantMean(batch_shape=shape)
+    >>> kernel = ScaleKernel(RBFKernel(batch_shape=shape), batch_shape=shape)
+    >>> train_size = num_particles // 2
+    >>> train_xu, test_xu = xu[:train_size, :], xu[train_size:, :]
+    >>> train_y, test_y = y[:, :train_size], y[:, train_size:]
     >>> model = ExactGPModel(train_xu, train_y, likelihood, mean, kernel)
     >>> mll = ExactMarginalLogLikelihood(likelihood, model)
     >>> pred_f = model(train_xu)
     >>> loss = -mll(pred_f, train_y)
-    >>> torch.testing.assert_allclose(loss, -likelihood(pred_f).log_prob(train_y) / 32)
+    >>> assert_allclose(loss, -likelihood(pred_f).log_prob(train_y) / train_size)
     >>> m,l = model.eval(), likelihood.eval()
     >>> pred_y = likelihood(model(test_xu))
-    >>> mll = -pred_y.log_prob(test_y).sum()
+    >>> loss = -pred_y.log_prob(test_y) / train_size
     """
 
     def __init__(self,
@@ -79,18 +104,19 @@ class ExactGPModel(gpytorch.models.ExactGP):
             [out_dim x num_points x in_dim].
             Train outputs have to have shape [out_dim x num_points].
         """
-        super().__init__(train_inputs, train_outputs, likelihood)
-        self.num_outputs = train_outputs.shape[0]
+        GPSSM.__init__(self, train_outputs.shape[0])
+        ExactGP.__init__(self, train_inputs, train_outputs, likelihood)
+
         self.mean_module = mean
         self.covar_module = kernel
 
     def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
         if torch.equal(self.train_inputs[0], state_input):
-            return super().__call__(state_input, **kwargs)
+            return ExactGP.__call__(self, state_input, **kwargs)
         else:
             state_input = state_input.expand(self.num_outputs, *state_input.shape)
-            return super().__call__(state_input, **kwargs)
+            return ExactGP.__call__(self, state_input, **kwargs)
 
     def forward(self, state_input: torch.tensor) -> MultivariateNormal:
         """Forward call of GP class."""
@@ -99,7 +125,7 @@ class ExactGPModel(gpytorch.models.ExactGP):
         return MultivariateNormal(mean_x, covar_x)
 
 
-class VariationalGP(AbstractVariationalGP):
+class VariationalGP(GPSSM, AbstractVariationalGP):
     """Sparse Variational GP Class.
 
     Parameters
@@ -177,16 +203,16 @@ class VariationalGP(AbstractVariationalGP):
             self, inducing_points, variational_distribution,
             learn_inducing_locations=learn_inducing_loc
         )
-        super().__init__(variational_strategy)
+        GPSSM.__init__(self, num_outputs)
+        AbstractVariationalGP.__init__(self, variational_strategy)
         self.mean_module = mean
         self.covar_module = kernel
-        self.num_outputs = num_outputs
 
     def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
         if not torch.equal(state_input, self.variational_strategy.inducing_points):
             state_input = state_input.expand(self.num_outputs, *state_input.shape)
-        return super().__call__(state_input, **kwargs)
+        return AbstractVariationalGP.__call__(self, state_input, **kwargs)
 
     def forward(self, state_input: torch.tensor) -> MultivariateNormal:
         """Forward call of GP class."""
