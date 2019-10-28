@@ -76,6 +76,19 @@ class Dataset(data.TensorDataset):
                          torch.tensor(self.state_normalizer(self.states))
                          )
 
+    def __str__(self):
+        """Return string with dataset statistics."""
+        string = 'input dim: {} \noutput dim: {} \nstate dim: {} \n\n'.format(
+            self.dim_inputs, self.dim_outputs, self.dim_states
+        )
+        string += 'sequence length: {} \n'.format(
+            self.outputs.shape[1]
+        )
+        string += 'train_samples: {} \ntrain_sequences: {} \n'.format(
+            self.experiment_length, self.outputs.shape[0]
+        )
+        return string
+
 
 class Actuator(Dataset):
     """Actuator dataset implementation.

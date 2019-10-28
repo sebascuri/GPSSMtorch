@@ -23,7 +23,7 @@ jobs:
           command: |
 
             pip install --progress-bar off numpy
-            pip install --progress-bar off -e .[test,pytorch]
+            pip install --progress-bar off -e .[test]
 
 
       - save_cache:
