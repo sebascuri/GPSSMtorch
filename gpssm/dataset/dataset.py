@@ -71,9 +71,9 @@ class Dataset(data.TensorDataset):
         self.output_normalizer = Normalizer(self.outputs)
         self.state_normalizer = Normalizer(self.states)
 
-        super().__init__(torch.tensor(self.input_normalizer(self.inputs)),
-                         torch.tensor(self.output_normalizer(self.outputs)),
-                         torch.tensor(self.state_normalizer(self.states))
+        super().__init__(torch.tensor(self.input_normalizer(self.inputs)).float(),
+                         torch.tensor(self.output_normalizer(self.outputs)).float(),
+                         torch.tensor(self.state_normalizer(self.states)).float()
                          )
 
     def __str__(self):

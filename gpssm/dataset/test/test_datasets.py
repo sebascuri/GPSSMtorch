@@ -77,4 +77,4 @@ def test_dataset_shapes(train, dataset, sequence_length, sequence_stride):
 
     for tensor in [inputs, outputs, states]:
         assert type(tensor) == torch.Tensor
-        assert tensor.dtype == torch.float64
+        assert tensor.dtype == torch.float

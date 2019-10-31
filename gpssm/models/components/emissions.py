@@ -1,10 +1,9 @@
 """Emission model for GPSSM's."""
 from gpytorch.likelihoods import GaussianLikelihood, Likelihood
 from gpytorch.distributions import MultivariateNormal
-from abc import ABC
-import torch
+from abc import ABC, abstractmethod
 from torch import Tensor
-from typing import Union, Any
+from typing import Union, Any, Iterator
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Emission', 'GaussianEmission']
@@ -17,6 +16,7 @@ class Emission(ABC):
         self.dim_states = dim_states
         self.dim_outputs = dim_outputs
 
+    @abstractmethod
     def __call__(self, state: Tensor) -> MultivariateNormal:
         """Call the emission model for a given state.
 
@@ -32,6 +32,11 @@ class Emission(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def parameters(self) -> Iterator:
+        """Return an iterator with learnable parameters."""
+        raise NotImplementedError
+
 
 class GaussianEmission(Emission):
     """Implementation of Gaussian Emissions with a fixed Measurement Function.
@@ -44,34 +49,30 @@ class GaussianEmission(Emission):
     dim_outputs: int.
         Output dimension.
 
-    batch_size: int, optional.
-        Batch size of Likelihood (default: 1).
-
     likelihood: Likelihood, optional.
         Emission likelihood (default: Gaussian Likelihood).
 
     Examples
     --------
     >>> from gpytorch.distributions import MultivariateNormal
+    >>> import torch
+    >>> from torch import Size
     >>> from torch.testing import assert_allclose
     >>> dim_states, dim_outputs = 3, 2
     >>> num_particles = 8
     >>> emission = GaussianEmission(dim_states=dim_states, dim_outputs=dim_outputs)
     >>> d = MultivariateNormal(torch.zeros(dim_states), torch.eye(dim_states))
     >>> x = d.rsample(sample_shape=torch.Size([num_particles]))
-    >>> x = x.transpose(-1, -2)
-    >>> c = torch.zeros((dim_outputs, dim_states))
+    >>> c = torch.zeros((dim_states, dim_outputs))
     >>> c[:dim_outputs, :dim_outputs] = torch.eye(dim_outputs)
-    >>> assert_allclose(emission(x).loc, c @ x)
-    >>> assert_allclose(emission(x).loc.shape, torch.Size([dim_outputs, num_particles]))
+    >>> assert_allclose(emission(x).loc, x @ c)
+    >>> assert_allclose(emission(x).loc.shape, Size([num_particles, dim_outputs]))
+    >>> assert_allclose(emission(x).scale.shape, Size([num_particles, dim_outputs]))
     """
 
     def __init__(self, dim_states: int, dim_outputs: int,
                  likelihood: Likelihood = None) -> None:
         super().__init__(dim_states, dim_outputs)
-        self._c = torch.zeros((dim_outputs, dim_states))
-        self._c[:dim_outputs, :dim_outputs] = torch.eye(dim_outputs)
-
         if likelihood is not None:
             self.likelihood = likelihood
         else:
@@ -83,15 +84,15 @@ class GaussianEmission(Emission):
         Parameters
         ----------
         state: Tensor or MultivariateNormal.
-            State tensor of size [state_dim x num_particles].
+            State tensor of size [num_particles x state_dim].
 
         Returns
         -------
         output_distribution: MultivariateNormal
-            Distribution of size [output_dim x num_particles].
+            Distribution of size [state_dim x num_particles].
         """
         if type(state) is Tensor:
-            return self.likelihood(state[:self.dim_outputs])
+            return self.likelihood(state[:, :self.dim_outputs])
         elif type(state) is MultivariateNormal:
             state_distribution = MultivariateNormal(
                 state.loc[:self.dim_outputs],
@@ -99,6 +100,10 @@ class GaussianEmission(Emission):
             return self.likelihood(state_distribution)
         else:
             raise TypeError('Type {} of state not understood'.format(type(state)))
+
+    def parameters(self) -> Iterator:
+        """Return an iterator with learnable parameters."""
+        return self.likelihood.parameters()
 
     def expected_log_prob(self, measurement: Tensor, state: MultivariateNormal,
                           *params: Any, **kwargs: Any) -> Tensor:

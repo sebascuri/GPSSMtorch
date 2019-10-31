@@ -22,7 +22,7 @@ class GPSSM(object):
         Number of outputs the GP-SSM is modeling.
     """
 
-    def __init__(self, num_outputs):
+    def __init__(self, num_outputs: int):
         self.num_outputs = num_outputs
 
     def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
@@ -58,7 +58,7 @@ class ExactGPModel(GPSSM, ExactGP):
     Examples
     --------
     >>> import torch
-    >>> from gpssm.models.gp import ExactGPModel
+    >>> from gpssm.models.components.gp import ExactGPModel
     >>> from gpytorch.means import ConstantMean
     >>> from gpytorch.kernels import ScaleKernel, RBFKernel
     >>> from gpytorch.likelihoods import GaussianLikelihood
