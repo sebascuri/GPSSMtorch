@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from torch import Tensor
+from gpytorch.distributions import MultivariateNormal
 from torch.nn import Module
 from typing import Iterator
 
@@ -33,10 +34,25 @@ class SSMSVI(Module, ABC):
         """
         raise NotImplementedError
 
-    def forward(self, output_sequence: Tensor, input_sequence: Tensor = None,
-                state_sequence: Tensor = None) -> Tensor:
-        """See `self.elbo'."""
-        return self.elbo(output_sequence, input_sequence, state_sequence)
+    @abstractmethod
+    def forward(self, output_sequence: Tensor, input_sequence: Tensor = None
+                ) -> MultivariateNormal:
+        """Forward propagate the model.
+
+        Parameters
+        ----------
+        output_sequence: Tensor.
+            Tensor of output data [recognition_length x dim_outputs].
+
+        input_sequence: Tensor.
+            Tensor of input data [prediction_length x dim_inputs].
+
+        Returns
+        -------
+        output_distribution: MultivariateNormal.
+            MultivariateNormal of prediction_length x dim_outputs
+        """
+        raise NotImplementedError
 
     @abstractmethod
     def properties(self) -> Iterator:

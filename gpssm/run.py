@@ -1,5 +1,6 @@
 """Project main runner file."""
 
+import numpy as np
 import torch
 from torch import Size
 from torch.utils.data import DataLoader
@@ -14,12 +15,12 @@ from gpssm.models.components.recognition_model import OutputRecognition
 from gpssm.models.prssm import PRSSM
 import matplotlib.pyplot as plt
 
-
 if __name__ == "__main__":
     # Set hyper-parameters
-    num_epochs = 4
-    num_inducing_points = 25
+    num_epochs = 50
+    num_inducing_points = 50
     sequence_length = 50
+    recognition_length = 1
     num_particles = 64
     batch_size = 16
     learn_inducing_loc = True
@@ -27,11 +28,13 @@ if __name__ == "__main__":
     learning_rate = 0.01
     loss_factors = [1, 0]
 
-    dataset = Actuator(train=True, sequence_length=sequence_length)
-    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    train_set = Actuator(train=True, sequence_length=sequence_length)
+    test_set = Actuator(train=False, sequence_length=512)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
 
-    dim_inputs = dataset.dim_inputs
-    dim_outputs = dataset.dim_outputs
+    dim_inputs = train_set.dim_inputs
+    dim_outputs = train_set.dim_outputs
 
     # Initialize Components
     inducing_points = torch.randn(
@@ -43,7 +46,7 @@ if __name__ == "__main__":
                   ard_num_dims=dim_states + dim_inputs),
         batch_shape=Size([dim_states]))
 
-    gp = VariationalGP(inducing_points, mean, kernel, batch_size, learn_inducing_loc)
+    gp = VariationalGP(inducing_points, mean, kernel, learn_inducing_loc)
 
     emissions = GaussianEmission(dim_states=dim_states, dim_outputs=dim_outputs)
     transition = GaussianLikelihood(batch_size=dim_states)
@@ -58,11 +61,12 @@ if __name__ == "__main__":
         loss_factors=loss_factors,
         num_particles=num_particles
     )
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.properties(), lr=learning_rate)
 
+    # Train
     losses = []
     for epochs in range(num_epochs):
-        for idx, (inputs, outputs, states) in enumerate(data_loader):
+        for idx, (inputs, outputs, states) in enumerate(train_loader):
             # Zero the gradients of the Optimizer
             batch_size = inputs.shape[0]
             optimizer.zero_grad()
@@ -80,5 +84,20 @@ if __name__ == "__main__":
             losses.append(elbo.item())
             print(idx, elbo.item())
 
-        plt.plot(losses)
+    plt.plot(losses)
+    plt.show()
+
+    # Predict
+    with torch.no_grad():
+        for inputs, outputs, states in test_loader:
+            predicted_outputs = model.forward(outputs[0, :recognition_length],
+                                              inputs[0])
+
+            mean = predicted_outputs.loc.detach().numpy()
+            std = predicted_outputs.covariance_matrix.detach().numpy()
+            std = np.diagonal(std, axis1=1, axis2=2)
+        plt.plot(mean, 'b')
+        plt.plot(outputs[0].numpy(), 'r')
+        plt.fill_between(np.arange(512), (mean - std)[:, 0], (mean + std)[:, 0],
+                         alpha=0.2)
         plt.show()
