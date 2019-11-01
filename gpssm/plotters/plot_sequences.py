@@ -6,6 +6,74 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def plot_predictions(predicted_mean: np.ndarray, predicted_std: np.ndarray = None,
+                     true_outputs: np.ndarray = None,
+                     true_inputs: np.ndarray = None) -> plt.Figure:
+    """Plot predictions made by the model.
+
+    Parameters
+    ----------
+    predicted_mean: np.ndarray.
+        Predicted mean of shape [dim_outputs, time].
+    predicted_std: np.ndarray, optional.
+        Predicted standard deviation of shape [dim_outputs, time].
+    true_outputs: np.ndarray, optional.
+        True outputs of shape [dim_outputs, time].
+    true_inputs: np.ndarray, optional.
+        True inputs of shape [dim_inputs, time].
+
+    Returns
+    -------
+    figure: plt.Figure
+    """
+    legend = False
+
+    dim_outputs, time = predicted_mean.shape
+    if predicted_std is not None:
+        assert predicted_mean.shape == predicted_std.shape, """
+        Mean and standard deviation must have the same shape.
+        """
+
+    if true_outputs is not None:
+        legend = True
+        assert predicted_mean.shape == true_outputs.shape, """
+        Prediction and Target must have the same shape.
+        """
+
+    if true_inputs is not None:
+        dim_inputs, aux = true_inputs.shape
+        assert time == aux, """Output and input must have the same time."""
+    else:
+        dim_inputs = 0
+
+    fig, axes = plt.subplots(dim_outputs + dim_inputs, 1, sharex='all')
+    if dim_outputs + dim_inputs == 1:
+        axes = [axes]
+
+    for idx in range(dim_outputs):
+        axes[idx].plot(predicted_mean[idx], label='Predicted Output')
+        if predicted_std is not None:
+            axes[idx].fill_between(
+                np.arange(time),
+                (predicted_mean - predicted_std)[idx],
+                (predicted_mean + predicted_std)[idx],
+                alpha=0.2
+            )
+        if true_outputs is not None:
+            axes[idx].plot(true_outputs[idx], label='True Output')
+
+        axes[idx].set_ylabel('y_{}'.format(idx + 1))
+        if legend:
+            axes[idx].legend(loc='best')
+
+    for idx in range(dim_outputs):
+        axes[dim_inputs + idx].plot(true_inputs[idx])
+        axes[dim_inputs + idx].set_ylabel('u_{}'.format(idx + 1))
+
+    axes[-1].set_xlabel('Time')
+    return fig
+
+
 def plot_input_output(output_sequence: np.ndarray, input_sequence: np.ndarray,
                       single_plot: bool = False) -> plt.Figure:
     """Plot input/output data.
