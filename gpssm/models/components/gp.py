@@ -1,6 +1,7 @@
 """Implementation of GP Models."""
 
 import torch
+from abc import ABC, abstractmethod
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.likelihoods import Likelihood
 from gpytorch.means import Mean
@@ -13,21 +14,37 @@ __author__ = 'Sebastian Curi'
 __all__ = ['GPSSM', 'ExactGPModel', 'VariationalGP']
 
 
-class GPSSM(object):
+class GPSSM(ABC):
     """GPSSM's are GPs defined in different outputs.
 
     Parameters
     ----------
     num_outputs: int.
         Number of outputs the GP-SSM is modeling.
+
+    mean: Mean
+        Prior mean function of GP.
+
+    kernel: Kernel
+        Prior kernel function of GP.
     """
 
-    def __init__(self, num_outputs: int):
+    def __init__(self, num_outputs: int, mean: Mean, kernel: Kernel) -> None:
         self.num_outputs = num_outputs
+        self.mean_module = mean
+        self.covar_module = kernel
 
+    @abstractmethod
     def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
         """Call a GP-SSM at a given state-input pair."""
         raise NotImplementedError
+
+    def __str__(self) -> str:
+        """Return GP parameters as a string."""
+        # TODO: also think about other kernels + Mean functions.
+        lengthscale = self.covar_module.base_kernel.lengthscale.detach()
+        outputscale = self.covar_module.outputscale.detach()
+        return "outputscale: {}, lengthscale: {}".format(outputscale, lengthscale)
 
 
 class ExactGPModel(GPSSM, ExactGP):
@@ -104,11 +121,8 @@ class ExactGPModel(GPSSM, ExactGP):
             [out_dim x num_points x in_dim].
             Train outputs have to have shape [out_dim x num_points].
         """
-        GPSSM.__init__(self, train_outputs.shape[0])
         ExactGP.__init__(self, train_inputs, train_outputs, likelihood)
-
-        self.mean_module = mean
-        self.covar_module = kernel
+        GPSSM.__init__(self, train_outputs.shape[0], mean, kernel)
 
     def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
@@ -203,10 +217,8 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
             self, inducing_points, variational_distribution,
             learn_inducing_locations=learn_inducing_loc
         )
-        GPSSM.__init__(self, num_outputs)
         AbstractVariationalGP.__init__(self, variational_strategy)
-        self.mean_module = mean
-        self.covar_module = kernel
+        GPSSM.__init__(self, num_outputs, mean, kernel)
 
     def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""

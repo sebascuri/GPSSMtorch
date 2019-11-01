@@ -19,6 +19,10 @@ class Recognition(nn.Module):
         """Copy recognition model."""
         raise NotImplementedError
 
+    def __str__(self) -> str:
+        """Return recognition model parameters as a string."""
+        raise NotImplementedError
+
 
 class OutputRecognition(Recognition):
     """Recognition model based on the outputs of the first time-step."""
@@ -40,3 +44,7 @@ class OutputRecognition(Recognition):
     def copy(self) -> Recognition:
         """Copy recognition model."""
         return OutputRecognition(self.dim_states)
+
+    def __str__(self) -> str:
+        """Return recognition model parameters as a string."""
+        return 'covariance: {}'.format(self.sd_noise.detach() ** 2)

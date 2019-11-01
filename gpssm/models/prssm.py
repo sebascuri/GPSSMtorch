@@ -29,7 +29,7 @@ class PRSSM(SSMSVI):
         self.transitions = transitions
         self.emissions = emissions
 
-        self.prior_recognition = recognition_model
+        self.prior_recognition = recognition_model.copy()
         self.posterior_recognition = recognition_model.copy()
 
         self.loss_factors = loss_factors if loss_factors is not None else [1., 1.]
@@ -44,6 +44,18 @@ class PRSSM(SSMSVI):
             {'params': self.prior_recognition.parameters()},
             {'params': self.posterior_recognition.parameters()}
         ]
+
+    def __str__(self) -> str:
+        """Return string of object with parameters."""
+        string = "PRSSM Parameters: \n\n"
+        string += "GP {}\n".format(self.gp)
+        string += "Transition Noise: {}\n".format(
+            self.transitions.noise_covar.noise.detach())
+        string += "Emission {}\n".format(self.emissions)
+        string += "Prior x1 {}\n".format(self.prior_recognition)
+        string += "Posterior x1 {}\n".format(self.posterior_recognition)
+
+        return string
 
     @torch.jit.export
     def elbo(self, output_sequence: Tensor, input_sequence: Tensor = None,

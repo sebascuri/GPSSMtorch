@@ -1,6 +1,7 @@
 """Emission model for GPSSM's."""
 from gpytorch.likelihoods import GaussianLikelihood, Likelihood
 from gpytorch.distributions import MultivariateNormal
+from gpytorch.likelihoods.noise_models import Noise
 from abc import ABC, abstractmethod
 from torch import Tensor
 from typing import Union, Any, Iterator
@@ -33,8 +34,18 @@ class Emission(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def __str__(self) -> str:
+        """Return emission parameters as a string."""
+        raise NotImplementedError
+
+    @abstractmethod
     def parameters(self) -> Iterator:
         """Return an iterator with learnable parameters."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def noise_covar(self) -> Noise:
+        """Return component noise covariance."""
         raise NotImplementedError
 
 
@@ -101,9 +112,17 @@ class GaussianEmission(Emission):
         else:
             raise TypeError('Type {} of state not understood'.format(type(state)))
 
+    def __str__(self) -> str:
+        """Return recognition model parameters as a string."""
+        return 'covariance: {}'.format(self.likelihood.noise_covar.noise.detach())
+
     def parameters(self) -> Iterator:
         """Return an iterator with learnable parameters."""
         return self.likelihood.parameters()
+
+    def noise_covar(self) -> Noise:
+        """Return component noise covariance."""
+        return self.likelihood.noise_covar
 
     def expected_log_prob(self, measurement: Tensor, state: MultivariateNormal,
                           *params: Any, **kwargs: Any) -> Tensor:
