@@ -1,9 +1,9 @@
 """Implementation of PR-SSM algorithm."""
 
 from gpytorch.distributions import MultivariateNormal
-from gpytorch.likelihoods import Likelihood
-from .components.gp import VariationalGP
-from .components.emissions import Emission
+from .components.gp import ModelList
+from .components.emissions import Emissions
+from .components.transitions import Transitions
 from .components.recognition_model import Recognition
 from .ssm_vi import SSMSVI
 import torch
@@ -16,9 +16,9 @@ class PRSSM(SSMSVI):
     """Implementation of PR-SSM algorithm."""
 
     def __init__(self,
-                 gp_model: VariationalGP,
-                 transitions: Likelihood,
-                 emissions: Emission,
+                 gp_model: ModelList,
+                 transitions: Transitions,
+                 emissions: Emissions,
                  recognition_model: Recognition,
                  loss_factors: list = None,
                  num_particles: int = 32
@@ -49,9 +49,8 @@ class PRSSM(SSMSVI):
         """Return string of object with parameters."""
         string = "PRSSM Parameters: \n\n"
         string += "GP {}\n".format(self.gp)
-        string += "Transition Noise: {}\n".format(
-            self.transitions.noise_covar.noise.detach())
         string += "Emission {}\n".format(self.emissions)
+        string += "Transition {}\n".format(self.transitions)
         string += "Prior x1 {}\n".format(self.prior_recognition)
         string += "Posterior x1 {}\n".format(self.posterior_recognition)
 
@@ -65,11 +64,11 @@ class PRSSM(SSMSVI):
         Parameters
         ----------
         output_sequence: Tensor.
-            Tensor of output data [sequence_length x dim_outputs].
+            Tensor of output data [batch_size x sequence_length x dim_outputs].
         input_sequence: Tensor, optional.
-            Tensor of input data, if any [sequence_length x dim_inputs].
+            Tensor of input data, if any [batch_size x sequence_length x dim_inputs].
         state_sequence: Tensor, optional.
-            Tensor of state data, if any [sequence_length x dim_states].
+            Tensor of state data, if any [batch_size x sequence_length x dim_states].
 
         Returns
         -------
@@ -77,62 +76,68 @@ class PRSSM(SSMSVI):
             Differentiable tensor with ELBO of sequence.
         """
         num_particles = self.num_particles
-        dim_outputs = output_sequence.shape[-1]
         dim_inputs = input_sequence.shape[-1]
-
-        sequence_length = output_sequence.shape[-2]
+        batch_size, sequence_length, dim_outputs = output_sequence.shape
 
         # Calculate x1 from prior and posterior
         qx1 = self.posterior_recognition(output_sequence, input_sequence)
         px1 = self.prior_recognition(output_sequence, input_sequence)
 
-        # Initial State: Tensor (num_particles x dim_states)
+        # Initial State: Tensor (batch_size x num_particles x dim_states)
         state = qx1.rsample(sample_shape=torch.Size([num_particles]))
-        assert state.shape == torch.Size([num_particles, self.dim_states])
+        state = state.permute(1, 0, 2)
+        assert state.shape == torch.Size([batch_size, num_particles, self.dim_states])
 
         log_lik = torch.tensor(0.)
         for t in range(sequence_length):
             ############################################################################
             # Generate the Samples #
             ############################################################################
-            # Input: Torch (num_particles x dim_inputs)
-            u = input_sequence[t].expand(num_particles, dim_inputs)
-            assert u.shape == torch.Size([num_particles, dim_inputs])
+            # Input: Torch (batch_size x num_particles x dim_inputs)
+            u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
+            u = u.permute(1, 0, 2)
+            assert u.shape == torch.Size([batch_size, num_particles, dim_inputs])
 
-            # \hat{X}: Torch (num_particles x dim_states + dim_inputs)
+            # \hat{X}: Torch (batch_size x num_particles x dim_states + dim_inputs)
             state_input = torch.cat((state, u), dim=-1)
-            assert state_input.shape == torch.Size([num_particles,
-                                                    dim_inputs + self.dim_states])
+            assert state_input.shape == torch.Size(
+                [batch_size, num_particles, dim_inputs + self.dim_states])
 
-            # next_f: Multivariate Normal (state_dim x num_particles)
+            # next_f: Multivariate Normal (batch_size x state_dim x num_particles)
             next_f = self.gp(state_input)
-            assert next_f.loc.shape == torch.Size([self.dim_states, num_particles])
-            assert next_f.covariance_matrix.shape == torch.Size([self.dim_states,
-                                                                 num_particles,
-                                                                 num_particles])
+
+            for ix in range(self.dim_states):
+                assert next_f[ix].loc.shape == torch.Size([batch_size, num_particles])
+                assert next_f[ix].covariance_matrix.shape == torch.Size(
+                    [batch_size, num_particles, num_particles])
 
             # next_state: Multivariate Normal(state_dim x num_particles)
             next_state = self.transitions(next_f)
-            assert next_state.loc.shape == torch.Size([self.dim_states, num_particles])
-            assert next_state.covariance_matrix.shape == torch.Size([self.dim_states,
-                                                                     num_particles,
-                                                                     num_particles])
+            for ix in range(self.dim_states):
+                assert next_state[ix].loc.shape == torch.Size(
+                    [batch_size, num_particles])
+                assert next_state[ix].covariance_matrix.shape == torch.Size(
+                    [batch_size, num_particles, num_particles])
 
-            assert (next_state.loc == next_f.loc).all()
-            assert not (next_state.covariance_matrix == next_f.covariance_matrix).all()
+                assert (next_state[ix].loc == next_f[ix].loc).all()
+                assert not (next_state[ix].covariance_matrix == next_f[
+                    ix].covariance_matrix).all()
 
             # Output: Torch (dim_outputs)
-            output = output_sequence[t]
-            assert output.shape == torch.Size([dim_outputs])
+            y = output_sequence[:, t].expand(num_particles, batch_size, dim_outputs)
+            y = y.permute(1, 0, 2)
+            assert y.shape == torch.Size([batch_size, num_particles, dim_inputs])
 
             ############################################################################
-            # Calculate the Log-likelihood #
+            # Calculate the Log-likelihoods #
             ############################################################################
 
-            # Log-likelihood
-            # Log-likelihood
+            # Log-likelihoods
+            # Log-likelihoods
             y_pred = self.emissions(state)
-            log_lik += y_pred.log_prob(output).mean()
+
+            for iy in range(dim_outputs):
+                log_lik += y_pred[iy].log_prob(y[..., iy]).mean() / dim_outputs
 
             ############################################################################
             # Next State #
@@ -142,21 +147,25 @@ class PRSSM(SSMSVI):
             # state_d: Multivariate Normal (dim_states)
             # state: Tensor (dim_states x num_particles)
             state_d = next_state
-            state = state_d.rsample().t()
+            state = torch.zeros((batch_size, num_particles, self.dim_states))
+            for ix in range(self.dim_states):
+                state[:, :, ix] = state_d[ix].rsample()
 
         ################################################################################
         # Add KL Divergences #
         ################################################################################
 
         # There is 1 gp per dimension hence the sum.
-        kl_u = self.gp.variational_strategy.kl_divergence().sum()
+        kl_u = torch.tensor(0.)
+        for model in self.gp.models:
+            kl_u += model.variational_strategy.kl_divergence().sum()
         kl_x1 = kl_divergence(qx1, px1)
 
         elbo = -(log_lik * self.loss_factors[0] / sequence_length
                  - kl_x1 * self.loss_factors[0] / sequence_length
                  - kl_u
                  )
-        return elbo
+        return elbo.mean()
 
     @torch.jit.export
     def forward(self, output_sequence: Tensor, input_sequence: Tensor = None
@@ -166,10 +175,10 @@ class PRSSM(SSMSVI):
         Parameters
         ----------
         output_sequence: Tensor.
-            Tensor of output data [recognition_length x dim_outputs].
+            Tensor of output data [batch_size x recognition_length x dim_outputs].
 
         input_sequence: Tensor.
-            Tensor of input data [prediction_length x dim_inputs].
+            Tensor of input data [batch_size x prediction_length x dim_inputs].
 
         Returns
         -------
@@ -178,71 +187,89 @@ class PRSSM(SSMSVI):
         """
         num_particles = self.num_particles
 
-        recognition_length, dim_outputs = output_sequence.shape
-        sequence_length, dim_inputs = input_sequence.shape
+        batch_size, recognition_length, dim_outputs = output_sequence.shape
+        _, sequence_length, dim_inputs = input_sequence.shape
 
-        # state_d: Multivariate Normal (dim_states)
+        # state_d: Multivariate Normal (batch_size x dim_states)
         px1 = self.prior_recognition(output_sequence, input_sequence)
         state_d = px1
+        assert state_d.loc.shape == torch.Size([batch_size, self.dim_states])
+        assert state_d.covariance_matrix.shape == torch.Size(
+            [batch_size, self.dim_states, self.dim_states])
 
-        # Initial State: Tensor (num_particles x dim_states)
+        # State: Tensor (batch_size, num_particles x dim_states)
         state = state_d.sample(sample_shape=torch.Size([num_particles]))
-        assert state.shape == torch.Size([num_particles, self.dim_states])
+        state = state.permute(1, 0, 2)
+        assert state.shape == torch.Size([batch_size, num_particles, self.dim_states])
 
-        output_loc = torch.empty((0, dim_outputs))
-        output_covariance = torch.empty((0, dim_outputs, dim_outputs))
+        output_loc = torch.zeros((batch_size, sequence_length, dim_outputs))
+        output_cov = torch.zeros((batch_size, sequence_length, dim_outputs, dim_outputs)
+                                 )
 
         for t in range(sequence_length):
             ############################################################################
             # Generate the Samples #
             ############################################################################
 
-            # Input: Torch (num_particles x dim_inputs)
-            u = input_sequence[t].expand(num_particles, dim_inputs)
-            assert u.shape == torch.Size([num_particles, dim_inputs])
+            # Input: Tensor (batch_size x num_particles x dim_inputs)
+            u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
+            u = u.permute(1, 0, 2)
+            assert u.shape == torch.Size([batch_size, num_particles, dim_inputs])
 
-            # \hat{X}: Torch (num_particles x dim_states + dim_inputs)
+            # StateInput: Tensor (batch_size x num_particles x dim_states + dim_inputs)
             state_input = torch.cat((state, u), dim=-1)
-            assert state_input.shape == torch.Size([num_particles,
-                                                    dim_inputs + self.dim_states])
+            assert state_input.shape == torch.Size(
+                [batch_size, num_particles, dim_inputs + self.dim_states])
 
-            # next_f: Multivariate Normal (state_dim x num_particles)
+            # next_f: [Multivariate Normal(batch_size x num_particles)] x dim_output
             next_f = self.gp(state_input)
-            assert next_f.loc.shape == torch.Size([self.dim_states, num_particles])
-            assert next_f.covariance_matrix.shape == torch.Size([self.dim_states,
-                                                                 num_particles,
-                                                                 num_particles])
+            for ix in range(self.dim_states):
+                assert next_f[ix].loc.shape == torch.Size(
+                    [batch_size, num_particles])
+                assert next_f[ix].covariance_matrix.shape == torch.Size(
+                    [batch_size, num_particles, num_particles])
 
-            # next_state: Multivariate Normal(state_dim x num_particles)
+            # next_state: [Multivariate Normal(batch_size x num_particles)] x dim_output
             next_state = self.transitions(next_f)
-            assert next_state.loc.shape == torch.Size([self.dim_states, num_particles])
-            assert next_state.covariance_matrix.shape == torch.Size([self.dim_states,
-                                                                     num_particles,
-                                                                     num_particles])
+            for ix in range(self.dim_states):
+                assert next_state[ix].loc.shape == torch.Size(
+                    [batch_size, num_particles])
+                assert next_state[ix].covariance_matrix.shape == torch.Size(
+                    [batch_size, num_particles, num_particles])
 
-            assert (next_state.loc == next_f.loc).all()
-            assert not (next_state.covariance_matrix == next_f.covariance_matrix).all()
+                assert (next_state[ix].loc == next_f[ix].loc).all()
+                assert not (next_state[ix].covariance_matrix == next_f[
+                    ix].covariance_matrix).all()
 
-            # Output: Torch (dim_outputs)
+            # Output: [MultivariateNormal (batch_size x num_particles)] x dim_outputs
             output = self.emissions(state_d)
-            assert output.loc.shape == torch.Size([dim_outputs])
-            assert output.covariance_matrix.shape == torch.Size([dim_outputs,
-                                                                 dim_outputs])
 
-            output_loc = torch.cat((output_loc, output.loc.unsqueeze(0)), dim=0)
-            output_covariance = torch.cat((output_covariance,
-                                           output.covariance_matrix.unsqueeze(0)),
-                                          dim=0)
+            # Collapse particles!
+            for iy in range(dim_outputs):
+                output_loc[:, t, iy] = output[iy].loc.squeeze(dim=-1)
+                output_cov[:, t, iy, iy] = output[iy].covariance_matrix.squeeze()
 
             # next_state: Tensor(num_particles x state_dim)
             # state_d: Multivariate Normal (dim_states)
             # state: Tensor (dim_states x num_particles)
-            state_d = MultivariateNormal(
-                next_state.loc.mean(dim=1),
-                covariance_matrix=torch.diag(
-                    next_state.covariance_matrix.mean(dim=(1, 2)))
-            )
-            state = state_d.sample(sample_shape=torch.Size([num_particles]))
-            assert state.shape == torch.Size([num_particles, self.dim_states])
+            ############################################################################
+            # Next State #
+            ############################################################################
 
-        return MultivariateNormal(output_loc, covariance_matrix=output_covariance)
+            # next_state: Tensor (num_particles x state_dim)
+            # state_d: Multivariate Normal (dim_states)
+            # state: Tensor (dim_states x num_particles)
+
+            loc = torch.zeros(batch_size, self.dim_states)
+            cov = torch.zeros(batch_size, self.dim_states, self.dim_states)
+            for ix in range(self.dim_states):
+                loc[:, ix] = next_state[ix].loc.mean(dim=-1)
+                cov[:, ix, ix] = torch.diag(next_state[ix].covariance_matrix)
+
+            state_d = MultivariateNormal(loc, covariance_matrix=cov)
+            state = state_d.sample(sample_shape=torch.Size([num_particles]))
+            state = state.permute(1, 0, 2)
+            assert state.shape == torch.Size(
+                [batch_size, num_particles, self.dim_states])
+
+        return MultivariateNormal(output_loc, covariance_matrix=output_cov)

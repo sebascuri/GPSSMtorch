@@ -1,134 +1,89 @@
 """Emission model for GPSSM's."""
-from gpytorch.likelihoods import GaussianLikelihood, Likelihood
+from gpytorch.likelihoods import Likelihood
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.likelihoods.noise_models import Noise
-from abc import ABC, abstractmethod
 from torch import Tensor
-from typing import Union, Any, Iterator
+from torch.nn import ModuleList
+from typing import Union, Any, List
 
 __author__ = 'Sebastian Curi'
-__all__ = ['Emission', 'GaussianEmission']
+__all__ = ['Emissions']
 
 
-class Emission(ABC):
-    """Base class of emission model."""
-
-    def __init__(self, dim_states: int, dim_outputs: int) -> None:
-        self.dim_states = dim_states
-        self.dim_outputs = dim_outputs
-
-    @abstractmethod
-    def __call__(self, state: Tensor) -> MultivariateNormal:
-        """Call the emission model for a given state.
-
-        Parameters
-        ----------
-        state: Tensor.
-            State tensor of size [state_dim x batch_size].
-
-        Returns
-        -------
-        output_distribution: MultivariateNormal.
-            Distribution of size [output_dim x batch_size].
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def __str__(self) -> str:
-        """Return emission parameters as a string."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def parameters(self) -> Iterator:
-        """Return an iterator with learnable parameters."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def noise_covar(self) -> Noise:
-        """Return component noise covariance."""
-        raise NotImplementedError
-
-
-class GaussianEmission(Emission):
+class Emissions(Likelihood):
     """Implementation of Gaussian Emissions with a fixed Measurement Function.
 
     Parameters
     ----------
-    dim_states: int.
-        State dimension.
-
-    dim_outputs: int.
-        Output dimension.
-
-    likelihood: Likelihood, optional.
-        Emission likelihood (default: Gaussian Likelihood).
+    likelihoods: Likelihood, optional.
+        Emission likelihoods (default: Gaussian Likelihood).
 
     Examples
     --------
     >>> from gpytorch.distributions import MultivariateNormal
     >>> import torch
     >>> from torch import Size
+    >>> from gpytorch.likelihoods import GaussianLikelihood
     >>> from torch.testing import assert_allclose
     >>> dim_states, dim_outputs = 3, 2
     >>> num_particles = 8
-    >>> emission = GaussianEmission(dim_states=dim_states, dim_outputs=dim_outputs)
+    >>> emission = Emissions([GaussianLikelihood(), GaussianLikelihood()])
     >>> d = MultivariateNormal(torch.zeros(dim_states), torch.eye(dim_states))
     >>> x = d.rsample(sample_shape=torch.Size([num_particles]))
     >>> c = torch.zeros((dim_states, dim_outputs))
     >>> c[:dim_outputs, :dim_outputs] = torch.eye(dim_outputs)
-    >>> assert_allclose(emission(x).loc, x @ c)
-    >>> assert_allclose(emission(x).loc.shape, Size([num_particles, dim_outputs]))
-    >>> assert_allclose(emission(x).scale.shape, Size([num_particles, dim_outputs]))
+    >>> assert_allclose(emission(x)[0].loc, (x @ c)[:, 0])
+    >>> assert_allclose(emission(x)[0].loc.shape, Size([num_particles]))
+    >>> assert_allclose(emission(x)[0].scale.shape, Size([num_particles]))
     """
 
-    def __init__(self, dim_states: int, dim_outputs: int,
-                 likelihood: Likelihood = None) -> None:
-        super().__init__(dim_states, dim_outputs)
-        if likelihood is not None:
-            self.likelihood = likelihood
-        else:
-            self.likelihood = GaussianLikelihood()
+    def __init__(self, likelihoods: List[Likelihood] = None) -> None:
+        super().__init__()
+        self.dim_outputs = len(likelihoods)
+        self.likelihoods = ModuleList(likelihoods)
 
-    def __call__(self, state: Union[Tensor, MultivariateNormal]) -> MultivariateNormal:
+    def __call__(self, state: Union[Tensor, MultivariateNormal], *args, **kwargs
+                 ) -> List[MultivariateNormal]:
         """Call the emission model for a given state.
 
         Parameters
         ----------
-        state: Tensor or MultivariateNormal.
-            State tensor of size [num_particles x state_dim].
+        state: List of Tensor or MultivariateNormal.
+            State tensor of size [batch_size x num_particles].
 
         Returns
         -------
-        output_distribution: MultivariateNormal
-            Distribution of size [state_dim x num_particles].
+        output_distribution:List of MultivariateNormal
+            Distribution of size [batch_size x state_dim x num_particles].
+
         """
         if type(state) is Tensor:
-            return self.likelihood(state[:, :self.dim_outputs])
+            return [self.likelihoods[i](state[..., i]) for i in range(self.dim_outputs)]
+
         elif type(state) is MultivariateNormal:
-            state_distribution = MultivariateNormal(
-                state.loc[:self.dim_outputs],
-                state.covariance_matrix[:self.dim_outputs])
-            return self.likelihood(state_distribution)
+            return [self.likelihoods[i](MultivariateNormal(
+                state.loc[:, i:(i+1)],
+                state.covariance_matrix[:, i:(i + 1), i:(i + 1)]))
+                for i in range(self.dim_outputs)]
         else:
             raise TypeError('Type {} of state not understood'.format(type(state)))
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""
-        return 'covariance: {}'.format(self.likelihood.noise_covar.noise.detach())
-
-    def parameters(self) -> Iterator:
-        """Return an iterator with learnable parameters."""
-        return self.likelihood.parameters()
+        string = ""
+        for i in range(self.dim_outputs):
+            string += "component {} {}".format(
+                i, str(self.likelihoods[i].noise_covar.noise.detach()))
+        return string
 
     def noise_covar(self) -> Noise:
         """Return component noise covariance."""
-        return self.likelihood.noise_covar
+        return self.likelihoods.noise_covar
 
-    def expected_log_prob(self, measurement: Tensor, state: MultivariateNormal,
-                          *params: Any, **kwargs: Any) -> Tensor:
+    def expected_log_prob(self, measurement: Tensor,
+                          state: List[MultivariateNormal],
+                          *params: Any, **kwargs: Any) -> List[Tensor]:
         """Return the expected log prob of a `tensor' under the `state' distribution."""
-        predicted_measurement = MultivariateNormal(
-            state.loc[:self.dim_outputs],
-            state.covariance_matrix[:self.dim_outputs])
-        return self.likelihood.expected_log_prob(measurement, predicted_measurement,
-                                                 *params, **kwargs)
+        return [self.likelihoods[i].expected_log_prob(measurement[..., i], state[i],
+                                                      *params, **kwargs)
+                for i in range(self.dim_outputs)]

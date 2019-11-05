@@ -9,9 +9,12 @@ from gpytorch.kernels import Kernel
 from gpytorch.models import AbstractVariationalGP, ExactGP
 from gpytorch.variational import CholeskyVariationalDistribution
 from gpytorch.variational import VariationalStrategy
+from gpytorch.models.model_list import AbstractModelList, LikelihoodList
+from torch.nn import ModuleList
+from typing import List
 
 __author__ = 'Sebastian Curi'
-__all__ = ['GPSSM', 'ExactGPModel', 'VariationalGP']
+__all__ = ['GPSSM', 'ExactGPModel', 'VariationalGP', 'ModelList']
 
 
 class GPSSM(ABC):
@@ -19,9 +22,6 @@ class GPSSM(ABC):
 
     Parameters
     ----------
-    num_outputs: int.
-        Number of outputs the GP-SSM is modeling.
-
     mean: Mean
         Prior mean function of GP.
 
@@ -29,8 +29,7 @@ class GPSSM(ABC):
         Prior kernel function of GP.
     """
 
-    def __init__(self, num_outputs: int, mean: Mean, kernel: Kernel) -> None:
-        self.num_outputs = num_outputs
+    def __init__(self, mean: Mean, kernel: Kernel) -> None:
         self.mean_module = mean
         self.covar_module = kernel
 
@@ -82,32 +81,29 @@ class ExactGPModel(GPSSM, ExactGP):
     >>> from gpytorch.mlls import ExactMarginalLogLikelihood
     >>> from torch import Size
     >>> from torch.testing import assert_allclose
-    >>> num_particles = 32
-    >>> dim_x, dim_u = 2, 1
-    >>> dim_xu = dim_x + dim_u
-    >>> dim_y = dim_x
-    >>> shape = Size([dim_y])
-    >>> xu = torch.randn((num_particles, dim_xu))
-    >>> assert_allclose(xu.shape, Size([num_particles, dim_xu]))
-    >>> y1 = (torch.sin(xu[:, 0]) + 2 * xu[:, 2] - xu[:, 1] ** 2)
-    >>> y2 = (torch.cos(xu[:, 0]) - 2 * xu[:, 2] ** 2 + xu[:, 1])
-    >>> y = torch.cat((y1.unsqueeze(-1), y2.unsqueeze(-1)), dim=-1)
-    >>> y += 0.1 * torch.randn((num_particles, dim_y))
-    >>> y = y.permute(-1, 0)
-    >>> likelihood = GaussianLikelihood(batch_shape=shape)
-    >>> mean = ConstantMean(batch_shape=shape)
-    >>> kernel = ScaleKernel(RBFKernel(batch_shape=shape), batch_shape=shape)
-    >>> train_size = num_particles // 2
-    >>> train_xu, test_xu = xu[:train_size, :], xu[train_size:, :]
-    >>> train_y, test_y = y[:, :train_size], y[:, train_size:]
-    >>> model = ExactGPModel(train_xu, train_y, likelihood, mean, kernel)
-    >>> mll = ExactMarginalLogLikelihood(likelihood, model)
-    >>> pred_f = model(train_xu)
+    >>> data_size = 32
+    >>> dim_x = 2
+    >>> x = torch.randn((data_size, dim_x))
+    >>> assert_allclose(x.shape, Size([data_size, dim_x]))
+    >>> y = torch.sin(x[:, 0]) + 2 * x[:, 1] - x[:, 1] ** 2
+    >>> y += 0.1 * torch.randn(data_size)
+    >>> likelihoods = GaussianLikelihood()
+    >>> mean = ConstantMean()
+    >>> kernel = ScaleKernel(RBFKernel())
+    >>> train_size = data_size // 2
+    >>> train_x, test_x = x[:train_size], x[train_size:]
+    >>> train_y, test_y = y[:train_size], y[train_size:]
+    >>> model = ExactGPModel(train_x, train_y, likelihoods, mean, kernel)
+    >>> mll = ExactMarginalLogLikelihood(likelihoods, model)
+    >>> pred_f = model(train_x)
     >>> loss = -mll(pred_f, train_y)
-    >>> assert_allclose(loss, -likelihood(pred_f).log_prob(train_y) / train_size)
-    >>> m,l = model.eval(), likelihood.eval()
-    >>> pred_y = likelihood(model(test_xu))
+    >>> assert_allclose(loss, -likelihoods(pred_f).log_prob(train_y) / train_size)
+    >>> m,l = model.eval(), likelihoods.eval()
+    >>> pred_y = likelihoods(model(test_x))
     >>> loss = -pred_y.log_prob(test_y) / train_size
+    >>> batch = model(torch.randn(8, 4, dim_x))
+    >>> assert_allclose(batch.loc.shape, torch.Size([8, 4]))
+    >>> assert_allclose(batch.covariance_matrix.shape, torch.Size([8, 4, 4]))
     """
 
     def __init__(self,
@@ -122,15 +118,11 @@ class ExactGPModel(GPSSM, ExactGP):
             Train outputs have to have shape [out_dim x num_points].
         """
         ExactGP.__init__(self, train_inputs, train_outputs, likelihood)
-        GPSSM.__init__(self, train_outputs.shape[0], mean, kernel)
+        GPSSM.__init__(self, mean, kernel)
 
     def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
-        if torch.equal(self.train_inputs[0], state_input):
-            return ExactGP.__call__(self, state_input, **kwargs)
-        else:
-            state_input = state_input.expand(self.num_outputs, *state_input.shape)
-            return ExactGP.__call__(self, state_input, **kwargs)
+        return ExactGP.__call__(self, state_input, **kwargs)
 
     def forward(self, state_input: torch.tensor) -> MultivariateNormal:
         """Forward call of GP class."""
@@ -173,57 +165,53 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
     >>> from gpytorch.kernels import ScaleKernel, RBFKernel
     >>> from gpytorch.likelihoods import GaussianLikelihood
     >>> from gpytorch.mlls import VariationalELBO, ExactMarginalLogLikelihood
-    >>> import torch.testing
-    >>> num_points = 64
-    >>> xu = torch.randn((num_points, 3))
+    >>> from torch.testing import assert_allclose
+    >>> data_size = 64
+    >>> dim_x = 2
+    >>> x = torch.randn((data_size, dim_x))
     >>> num_inducing_points = 25
     >>> learn_inducing_loc = True
-    >>> dim_x, dim_u = 2, 1
-    >>> dim_y = dim_x
-    >>> y1 = (torch.sin(xu[:, 0]) + 2 * xu[:, 2] - xu[:, 1] ** 2).unsqueeze(dim=1)
-    >>> y2 = (torch.cos(xu[:, 0]) - 2 * xu[:, 2] ** 2 + xu[:, 1]).unsqueeze(dim=1)
-    >>> y = torch.cat((y1, y2), dim=-1) + 0.1 * torch.randn((64, 2))
-    >>> y = y.t()
-    >>> inducing_points = torch.randn((dim_y, num_inducing_points, dim_x + dim_u))
-    >>> likelihood = GaussianLikelihood(batch_size=dim_x)
-    >>> mean = ConstantMean(batch_size=dim_x)
-    >>> kernel = ScaleKernel(RBFKernel(batch_size=dim_x), batch_size=dim_x)
+    >>> y = torch.sin(x[:, 0]) + 2 * x[:, 1] - x[:, 1] ** 2 + torch.randn(data_size)
+    >>> inducing_points = torch.randn((num_inducing_points, dim_x))
+    >>> likelihoods = GaussianLikelihood()
+    >>> mean = ConstantMean()
+    >>> kernel = ScaleKernel(RBFKernel())
     >>> model = VariationalGP(inducing_points, mean, kernel, learn_inducing_loc)
-    >>> mll = VariationalELBO(likelihood, model, num_points, combine_terms=False)
-    >>> pred_f = model(xu)
+    >>> mll = VariationalELBO(likelihoods, model, data_size, combine_terms=False)
+    >>> pred_f = model(x)
     >>> log_lik, kl_div, log_prior = mll(pred_f, y)
     >>> loss = -(log_lik - kl_div + log_prior).sum()
-    >>> pred_y = likelihood(pred_f)
-    >>> ell = likelihood.expected_log_prob(y, pred_f) / num_points
-    >>> torch.testing.assert_allclose(ell, log_lik)
-    >>> model_i = model.sample_gp(likelihood)
+    >>> pred_y = likelihoods(pred_f)
+    >>> ell = likelihoods.expected_log_prob(y, pred_f) / data_size
+    >>> assert_allclose(ell, log_lik)
+    >>> model_i = model.sample_gp(likelihoods)
     >>> m = model_i.eval()
-    >>> mll = ExactMarginalLogLikelihood(likelihood, model)
-    >>> pred_f = model(xu)
+    >>> mll = ExactMarginalLogLikelihood(likelihoods, model)
+    >>> pred_f = model(x)
     >>> loss = -mll(pred_f, y)
-    >>> torch.testing.assert_allclose(loss, -likelihood(pred_f).log_prob(y) / 64)
+    >>> torch.testing.assert_allclose(loss, -likelihoods(pred_f).log_prob(y)/data_size)
+    >>> batch = model(torch.randn(8, 4, dim_x))
+    >>> assert_allclose(batch.loc.shape, torch.Size([8, 4]))
+    >>> assert_allclose(batch.covariance_matrix.shape, torch.Size([8, 4, 4]))
     """
 
     def __init__(self, inducing_points: torch.tensor,
                  mean: Mean,
                  kernel: Kernel,
                  learn_inducing_loc: bool = True):
-        num_outputs, num_inducing, input_dims = inducing_points.shape
+        num_inducing, input_dims = inducing_points.shape
         variational_distribution = CholeskyVariationalDistribution(
             num_inducing_points=num_inducing,
-            batch_size=num_outputs
         )
         variational_strategy = VariationalStrategy(
             self, inducing_points, variational_distribution,
             learn_inducing_locations=learn_inducing_loc
         )
         AbstractVariationalGP.__init__(self, variational_strategy)
-        GPSSM.__init__(self, num_outputs, mean, kernel)
+        GPSSM.__init__(self, mean, kernel)
 
     def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
-        if not torch.equal(state_input, self.variational_strategy.inducing_points):
-            state_input = state_input.expand(self.num_outputs, *state_input.shape)
         return AbstractVariationalGP.__call__(self, state_input, **kwargs)
 
     def forward(self, state_input: torch.tensor) -> MultivariateNormal:
@@ -240,3 +228,109 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
 
         return ExactGPModel(train_xu, train_y, likelihood,
                             self.mean_module, self.covar_module)
+
+
+class ModelList(AbstractModelList):
+    """List of variational models.
+
+    Properties
+    ----------
+    models: list of GPSSMs.
+
+    Examples
+    --------
+    >>> from gpytorch.means import ConstantMean
+    >>> from gpytorch.kernels import ScaleKernel, RBFKernel
+    >>> from gpytorch.likelihoods import GaussianLikelihood
+    >>> from gpytorch.mlls import VariationalELBO, ExactMarginalLogLikelihood
+    >>> from torch.testing import assert_allclose
+    >>> data_size = 64
+    >>> dim_x = 2
+    >>> x = torch.randn((data_size, dim_x))
+    >>> num_inducing_points = 25
+    >>> learn_inducing_loc = True
+    >>> y1 = torch.sin(x[:, 0]) + 2 * x[:, 1] - x[:, 1] ** 2 + torch.randn(data_size)
+    >>> y2 = torch.cos(x[:, 0]) - 2 * x[:, 1] + x[:, 1] ** 2 + torch.randn(data_size)
+    >>> y = [y1, y2]
+    >>> ip = torch.randn((num_inducing_points, dim_x))
+    >>> mean = ConstantMean()
+    >>> kernel = ScaleKernel(RBFKernel())
+    >>> model = ModelList([VariationalGP(ip, mean, kernel, True) for _ in y])
+    >>> assert model.num_outputs == 2
+    >>> assert type(model(x)) is list
+    >>> assert type(model(x)[0]) is MultivariateNormal
+    >>> mean_shape = torch.Size([data_size])
+    >>> cov_shape = torch.Size([data_size, data_size])
+    >>> assert_allclose(model(x)[0].loc.shape, mean_shape)
+    >>> assert_allclose(model(x)[0].covariance_matrix.shape, cov_shape)
+    >>> assert_allclose(model(x)[1].loc.shape, mean_shape)
+    >>> assert_allclose(model(x)[1].covariance_matrix.shape, cov_shape)
+    >>> x = torch.randn((8, 4, dim_x))
+    >>> mean_shape = torch.Size([8, 4])
+    >>> cov_shape = torch.Size([8, 4, 4])
+    >>> assert_allclose(model(x)[0].loc.shape, mean_shape)
+    >>> assert_allclose(model(x)[0].covariance_matrix.shape, cov_shape)
+    >>> assert_allclose(model(x)[1].loc.shape, mean_shape)
+    >>> assert_allclose(model(x)[1].covariance_matrix.shape, cov_shape)
+    """
+
+    def __init__(self, models: List[GPSSM]) -> None:
+        super().__init__()
+        self.models = ModuleList(models)
+
+        if isinstance(models[0], ExactGP):
+            self.likelihood = LikelihoodList(*[m.likelihood for m in models])
+
+    def __str__(self) -> str:
+        """Return GP parameters as a string."""
+        string = ""
+        for i in range(self.num_outputs):
+            string += "component {} {}".format(i, str(self.models[i]))
+        return string
+
+    @property
+    def num_outputs(self) -> int:
+        """Get the number of outputs."""
+        return len(self.models)
+
+    def forward_i(self, i, *args, **kwargs):
+        """Forward propagate model i."""
+        return self.models[i].forward(*args, **kwargs)
+
+    def likelihood_i(self, i, *args, **kwargs):
+        """Likelihood of model i."""
+        return self.models[i].likelihood(*args, **kwargs)
+
+    def forward(self, *args, **kwargs):
+        """Forward propagate all models."""
+        return [model.forward(*args, **kwargs) for model in self.models]
+
+    def __call__(self, *args, **kwargs):
+        """Forward propagate all models."""
+        return [model(*args, **kwargs) for model in self.models]
+
+
+if __name__ == "__main__":
+    from gpytorch.means import ConstantMean
+    from gpytorch.kernels import ScaleKernel, RBFKernel
+    from gpytorch.likelihoods import GaussianLikelihood
+
+    batch_size = 32
+    num_inducing_points = 25
+    dim_x = 2
+    x = torch.randn((batch_size, dim_x))
+    y = [x[:, 0] + 2 * x[:, 1] + 0.1 * torch.randn(batch_size),
+         torch.cos(x[:, 0]) + 0.1 * torch.randn(batch_size)
+         ]
+
+    m = []
+
+    for y_ in y:
+        inducing_points = torch.randn(num_inducing_points, dim_x)
+        likelihood = GaussianLikelihood()
+        mean = ConstantMean()
+        kernel = ScaleKernel(RBFKernel())
+        # m.append(ExactGPModel(x, y_, likelihoods, mean, kernel))
+        m.append(VariationalGP(inducing_points, mean, kernel, learn_inducing_loc=False))
+    ml = ModelList(m)
+    print(ml(x))

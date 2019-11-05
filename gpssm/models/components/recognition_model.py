@@ -35,11 +35,15 @@ class OutputRecognition(Recognition):
     def forward(self, output_sequence: Tensor,
                 input_sequence: Tensor) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        assert output_sequence.ndim == 3
         dim_outputs = output_sequence.shape[-1]
-        loc = torch.zeros(self.dim_states)
-        loc[:dim_outputs] = output_sequence[0]
+        batch_size = output_sequence.shape[0]
 
-        return MultivariateNormal(loc, covariance_matrix=torch.diag(self.sd_noise ** 2))
+        loc = torch.zeros(batch_size, self.dim_states)
+        loc[:, :dim_outputs] = output_sequence[:, 0]
+        cov = torch.diag(self.sd_noise ** 2)
+        cov = cov.expand(batch_size, *cov.shape)
+        return MultivariateNormal(loc, covariance_matrix=cov)
 
     def copy(self) -> Recognition:
         """Copy recognition model."""

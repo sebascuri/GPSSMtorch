@@ -2,65 +2,86 @@
 
 import numpy as np
 import torch
-from torch import Size
 from torch.utils.data import DataLoader
 from gpytorch.means import ConstantMean
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.kernels import ScaleKernel, RBFKernel
 
 from gpssm.dataset.dataset import Actuator
-from gpssm.models.components.gp import VariationalGP
-from gpssm.models.components.emissions import GaussianEmission
+from gpssm.models.components.gp import VariationalGP, ModelList
+from gpssm.models.components.transitions import Transitions
+from gpssm.models.components.emissions import Emissions
 from gpssm.models.components.recognition_model import OutputRecognition
 from gpssm.models.prssm import PRSSM
-import matplotlib.pyplot as plt
+from gpssm.models.utilities import get_inducing_points
+from gpssm.plotters.plot_sequences import plot_predictions
+from gpssm.plotters.plot_learning import plot_loss
 
 if __name__ == "__main__":
     # Set hyper-parameters
-    num_epochs = 50
-    num_inducing_points = 50
+    num_epochs = 1
+    num_inducing_points = 20
+    strategy = 'random'
     sequence_length = 50
     recognition_length = 1
-    num_particles = 64
+    num_particles = 50
     batch_size = 16
     learn_inducing_loc = True
-    dim_states = 1  # dataset.dim_states
-    learning_rate = 0.01
-    loss_factors = [1, 0]
+    dim_states = 1
+    learning_rate = 0.1
+    loss_factors = [0.5, 0]
 
     train_set = Actuator(train=True, sequence_length=sequence_length)
-    test_set = Actuator(train=False, sequence_length=512)
+    test_set = Actuator(train=False, sequence_length=sequence_length)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
+    test_loader = DataLoader(test_set, batch_size=2, shuffle=False)
 
     dim_inputs = train_set.dim_inputs
     dim_outputs = train_set.dim_outputs
 
     # Initialize Components
-    inducing_points = torch.randn(
-        (dim_states, num_inducing_points, dim_states + dim_inputs))
+    gps = []
+    transitions = []
+    for _ in range(dim_states):
+        inducing_points = get_inducing_points(num_inducing_points,
+                                              dim_states + dim_inputs,
+                                              strategy)
+        mean = ConstantMean()
+        kernel = ScaleKernel(RBFKernel(ard_num_dims=dim_states + dim_inputs))
+        gp = VariationalGP(inducing_points, mean, kernel, learn_inducing_loc)
 
-    mean = ConstantMean(batch_shape=Size([dim_states]))
-    kernel = ScaleKernel(
-        RBFKernel(batch_shape=Size([dim_states]),
-                  ard_num_dims=dim_states + dim_inputs),
-        batch_shape=Size([dim_states]))
+        gp.covar_module.outputscale = 0.5 ** 2
+        gp.covar_module.base_kernel.lengthscale = torch.tensor([2.] * (
+                dim_states + dim_inputs))
+        gps.append(gp)
 
-    gp = VariationalGP(inducing_points, mean, kernel, learn_inducing_loc)
+        transition = GaussianLikelihood()
+        transition.noise_covar.noise = 0.02 ** 2
+        transitions.append(transition)
 
-    emissions = GaussianEmission(dim_states=dim_states, dim_outputs=dim_outputs)
-    transition = GaussianLikelihood(batch_size=dim_states)
+    gps = ModelList(gps)
+    transitions = Transitions(transitions)
+
+    emissions = []
+    for _ in range(dim_outputs):
+        emission = GaussianLikelihood()
+        emission.noise_covar.noise = 1.
+        emissions.append(emission)
+
+    emissions = Emissions(likelihoods=emissions)
+
     recognition = OutputRecognition(dim_states=dim_states)
 
     # Initialize Model and Optimizer
     model = PRSSM(
-        gp_model=gp,
-        transitions=transition,
+        gp_model=gps,
+        transitions=transitions,
         emissions=emissions,
         recognition_model=recognition,
         loss_factors=loss_factors,
         num_particles=num_particles
     )
+    print(model)
     optimizer = torch.optim.Adam(model.properties(), lr=learning_rate)
 
     # Train
@@ -68,14 +89,10 @@ if __name__ == "__main__":
     for epochs in range(num_epochs):
         for idx, (inputs, outputs, states) in enumerate(train_loader):
             # Zero the gradients of the Optimizer
-            batch_size = inputs.shape[0]
             optimizer.zero_grad()
 
             # Compute the elbo
-            elbo = torch.tensor(0.)
-            for i_batch in range(batch_size):
-                elbo += model.elbo(outputs[i_batch], inputs[i_batch], states[i_batch])
-            elbo = elbo / batch_size
+            elbo = model.elbo(outputs, inputs, states)
 
             # Back-propagate
             elbo.backward()
@@ -83,21 +100,23 @@ if __name__ == "__main__":
 
             losses.append(elbo.item())
             print(idx, elbo.item())
+            break
+        print(model)
 
-    plt.plot(losses)
-    plt.show()
+    fig = plot_loss(losses, ylabel='ELBO')
+    fig.show()
 
     # Predict
     with torch.no_grad():
         for inputs, outputs, states in test_loader:
-            predicted_outputs = model.forward(outputs[0, :recognition_length],
-                                              inputs[0])
+            model.gp.eval()
+            predicted_outputs = model.forward(outputs[:, :recognition_length], inputs)
 
             mean = predicted_outputs.loc.detach().numpy()
-            std = predicted_outputs.covariance_matrix.detach().numpy()
-            std = np.diagonal(std, axis1=1, axis2=2)
-        plt.plot(mean, 'b')
-        plt.plot(outputs[0].numpy(), 'r')
-        plt.fill_between(np.arange(512), (mean - std)[:, 0], (mean + std)[:, 0],
-                         alpha=0.2)
-        plt.show()
+            var = predicted_outputs.covariance_matrix.detach().numpy()
+            var = np.diagonal(var, axis1=-2, axis2=-1)
+
+            fig = plot_predictions(mean[0].T, np.sqrt(var[0]).T,
+                                   outputs[0].detach().numpy().T,
+                                   inputs[0].detach().numpy().T)
+            fig.show()
