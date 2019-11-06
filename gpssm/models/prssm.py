@@ -10,6 +10,7 @@ import torch
 import torch.jit
 from torch import Tensor
 from torch.distributions import kl_divergence
+from typing import List
 
 
 class PRSSM(SSMSVI):
@@ -20,7 +21,7 @@ class PRSSM(SSMSVI):
                  transitions: Transitions,
                  emissions: Emissions,
                  recognition_model: Recognition,
-                 loss_factors: list = None,
+                 loss_factors: List[float] = None,
                  num_particles: int = 32
                  ) -> None:
         super().__init__()
@@ -57,9 +58,9 @@ class PRSSM(SSMSVI):
         return string
 
     @torch.jit.export
-    def elbo(self, output_sequence: Tensor, input_sequence: Tensor = None,
-             state_sequence: Tensor = None) -> Tensor:
-        """Calculate the ELBO for the given output/input/state data.
+    def loss(self, output_sequence: Tensor, input_sequence: Tensor = None,
+             state_sequence: Tensor = None, key: str = None) -> Tensor:
+        """Calculate the loss for the given output/input/state data.
 
         Parameters
         ----------
@@ -69,12 +70,15 @@ class PRSSM(SSMSVI):
             Tensor of input data, if any [batch_size x sequence_length x dim_inputs].
         state_sequence: Tensor, optional.
             Tensor of state data, if any [batch_size x sequence_length x dim_states].
+        key: str, optional.
+            Key to identify the loss (default = ELBO).
 
         Returns
         -------
-        elbo: Tensor.
-            Differentiable tensor with ELBO of sequence.
+        loss: Tensor.
+            Differentiable loss tensor of sequence.
         """
+        key = key if key is not None else 'elbo'
         num_particles = self.num_particles
         dim_inputs = input_sequence.shape[-1]
         batch_size, sequence_length, dim_outputs = output_sequence.shape
@@ -84,11 +88,13 @@ class PRSSM(SSMSVI):
         px1 = self.prior_recognition(output_sequence, input_sequence)
 
         # Initial State: Tensor (batch_size x num_particles x dim_states)
-        state = qx1.rsample(sample_shape=torch.Size([num_particles]))
+        state_d = qx1
+        state = state_d.rsample(sample_shape=torch.Size([num_particles]))
         state = state.permute(1, 0, 2)
         assert state.shape == torch.Size([batch_size, num_particles, self.dim_states])
 
         log_lik = torch.tensor(0.)
+        l2 = torch.tensor(0.)
         for t in range(sequence_length):
             ############################################################################
             # Generate the Samples #
@@ -124,21 +130,21 @@ class PRSSM(SSMSVI):
                     ix].covariance_matrix).all()
 
             # Output: Torch (dim_outputs)
-            y = output_sequence[:, t].expand(num_particles, batch_size, dim_outputs)
-            y = y.permute(1, 0, 2)
-            assert y.shape == torch.Size([batch_size, num_particles, dim_inputs])
+            y = output_sequence[:, t]  # .expand(num_particles, batch_size, dim_outputs)
+            # y = y.permute(1, 0, 2)
+            assert y.shape == torch.Size([batch_size, dim_inputs])
 
             ############################################################################
-            # Calculate the Log-likelihoods #
+            # Calculate the Log-likelihood and L2-error #
             ############################################################################
 
-            # Log-likelihoods
             # Log-likelihoods
             y_pred = self.emissions(state)
 
             for iy in range(dim_outputs):
-                log_lik += y_pred[iy].log_prob(y[..., iy]).mean() / dim_outputs
-
+                # call mean() to average the losses from different batches.
+                log_lik += y_pred[iy].log_prob(y[..., iy:(iy + 1)]).mean() / dim_outputs
+                l2 += ((y_pred[iy].loc - y[..., iy:(iy + 1)]) ** 2).mean() / dim_outputs
             ############################################################################
             # Next State #
             ############################################################################
@@ -158,14 +164,30 @@ class PRSSM(SSMSVI):
         # There is 1 gp per dimension hence the sum.
         kl_u = torch.tensor(0.)
         for model in self.gp.models:
-            kl_u += model.variational_strategy.kl_divergence().sum()
-        kl_x1 = kl_divergence(qx1, px1)
+            kl_u += model.variational_strategy.kl_divergence().mean()
 
-        elbo = -(log_lik * self.loss_factors[0] / sequence_length
-                 - kl_x1 * self.loss_factors[0] / sequence_length
-                 - kl_u
-                 )
-        return elbo.mean()
+        kl_x1 = kl_divergence(qx1, px1).mean()
+
+        ################################################################################
+        # Return different keys. #
+        ################################################################################
+
+        if key.lower() == 'log_likelihood':
+            return -log_lik
+        elif key.lower() == 'elbo':
+            elbo = -(log_lik * self.loss_factors[0]  # / sequence_length
+                     - kl_x1
+                     - kl_u
+                     )
+            return elbo
+        elif key.lower() == 'l2':
+            return l2
+        elif key.lower() == 'rmse':
+            return torch.sqrt(l2)
+        elif key.lower() == 'elbo_separated':
+            return log_lik, kl_x1, kl_u
+        else:
+            raise NotImplementedError("Key {} not implemented".format(key))
 
     @torch.jit.export
     def forward(self, output_sequence: Tensor, input_sequence: Tensor = None
@@ -198,14 +220,13 @@ class PRSSM(SSMSVI):
             [batch_size, self.dim_states, self.dim_states])
 
         # State: Tensor (batch_size, num_particles x dim_states)
-        state = state_d.sample(sample_shape=torch.Size([num_particles]))
+        state = state_d.rsample(sample_shape=torch.Size([num_particles]))
         state = state.permute(1, 0, 2)
         assert state.shape == torch.Size([batch_size, num_particles, self.dim_states])
 
         output_loc = torch.zeros((batch_size, sequence_length, dim_outputs))
         output_cov = torch.zeros((batch_size, sequence_length, dim_outputs, dim_outputs)
                                  )
-
         for t in range(sequence_length):
             ############################################################################
             # Generate the Samples #
@@ -242,16 +263,15 @@ class PRSSM(SSMSVI):
                     ix].covariance_matrix).all()
 
             # Output: [MultivariateNormal (batch_size x num_particles)] x dim_outputs
-            output = self.emissions(state_d)
+            aux_loc = state.mean(dim=1)
+            aux_cov = torch.diag_embed(state.var(dim=1))
+            output = self.emissions(MultivariateNormal(aux_loc, aux_cov))
 
             # Collapse particles!
             for iy in range(dim_outputs):
-                output_loc[:, t, iy] = output[iy].loc.squeeze(dim=-1)
-                output_cov[:, t, iy, iy] = output[iy].covariance_matrix.squeeze()
+                output_loc[:, t, iy] = output[iy].loc
+                output_cov[:, t, iy, iy] = output[iy].covariance_matrix
 
-            # next_state: Tensor(num_particles x state_dim)
-            # state_d: Multivariate Normal (dim_states)
-            # state: Tensor (dim_states x num_particles)
             ############################################################################
             # Next State #
             ############################################################################
@@ -260,15 +280,16 @@ class PRSSM(SSMSVI):
             # state_d: Multivariate Normal (dim_states)
             # state: Tensor (dim_states x num_particles)
 
-            loc = torch.zeros(batch_size, self.dim_states)
-            cov = torch.zeros(batch_size, self.dim_states, self.dim_states)
+            state = torch.zeros((batch_size, num_particles, self.dim_states))
             for ix in range(self.dim_states):
-                loc[:, ix] = next_state[ix].loc.mean(dim=-1)
-                cov[:, ix, ix] = torch.diag(next_state[ix].covariance_matrix)
+                aux_loc = next_state[ix].loc.mean(dim=1)
+                aux_cov = next_state[ix].covariance_matrix.mean(dim=(1, 2)).expand(
+                    batch_size, 1, 1)
 
-            state_d = MultivariateNormal(loc, covariance_matrix=cov)
-            state = state_d.sample(sample_shape=torch.Size([num_particles]))
-            state = state.permute(1, 0, 2)
+                state[:, :, ix] = MultivariateNormal(aux_loc, aux_cov
+                                                     ).sample(
+                    sample_shape=torch.Size([num_particles])).T
+
             assert state.shape == torch.Size(
                 [batch_size, num_particles, self.dim_states])
 

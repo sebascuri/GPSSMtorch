@@ -14,9 +14,9 @@ class SSMSVI(Module, ABC):
         super().__init__()
 
     @abstractmethod
-    def elbo(self, output_sequence: Tensor, input_sequence: Tensor = None,
-             state_sequence: Tensor = None) -> Tensor:
-        """Calculate the ELBO for the given output/input/state data.
+    def loss(self, output_sequence: Tensor, input_sequence: Tensor = None,
+             state_sequence: Tensor = None, key: str = None) -> Tensor:
+        """Calculate the Loss for the given output/input/state data.
 
         Parameters
         ----------
@@ -26,11 +26,13 @@ class SSMSVI(Module, ABC):
             Tensor of input data, if any [batch_size x sequence_length x dim_inputs].
         state_sequence: Tensor, optional.
             Tensor of state data, if any [batch_size x sequence_length x dim_states].
+        key: str, optional.
+            Key to identify the loss.
 
         Returns
         -------
-        elbo: Tensor.
-            Differentiable tensor with ELBO of sequence.
+        loss: Tensor.
+            Differentiable loss tensor of sequence.
         """
         raise NotImplementedError
 
