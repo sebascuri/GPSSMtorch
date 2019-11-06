@@ -11,12 +11,12 @@ __all__ = ['Emissions']
 
 
 class Emissions(Likelihood):
-    """Implementation of Gaussian Emissions with a fixed Measurement Function.
+    """Implementation of Emissions of the first n states.
 
     Parameters
     ----------
-    likelihoods: Likelihood, optional.
-        Emission likelihoods (default: Gaussian Likelihood).
+    likelihoods: list of Likelihood.
+        list of likelihoods for each component.
 
     Examples
     --------
@@ -37,24 +37,35 @@ class Emissions(Likelihood):
     >>> assert_allclose(emission(x)[0].scale.shape, Size([num_particles]))
     """
 
-    def __init__(self, likelihoods: List[Likelihood] = None) -> None:
+    def __init__(self, likelihoods: List[Likelihood]) -> None:
         super().__init__()
         self.dim_outputs = len(likelihoods)
         self.likelihoods = ModuleList(likelihoods)
 
-    def __call__(self, state: Union[Tensor, MultivariateNormal], *args, **kwargs
-                 ) -> List[MultivariateNormal]:
+    def __str__(self) -> str:
+        """Return recognition model parameters as a string."""
+        string = ""
+        for i in range(self.dim_outputs):
+            string += "component {} {}".format(
+                i, str(self.likelihoods[i].noise_covar.noise.detach()))
+        return string
+
+    def __call__(self, state: Union[Tensor, MultivariateNormal,
+                                    List[MultivariateNormal]],
+                 *args, **kwargs) -> List[MultivariateNormal]:
         """Call the emission model for a given state.
 
         Parameters
         ----------
-        state: List of Tensor or MultivariateNormal.
-            State tensor of size [batch_size x num_particles].
+        state: Tensor, MultivariateNormal or list of MultivariateNormal.
+            State tensor of size [batch_size x num_particles x dim_state] or,
+            MultivariateNormal of size [batch_size x dim_state] or,
+            list w/ length dim_state of MultivariateNormal [batch_size x num_particles].
 
         Returns
         -------
-        output_distribution:List of MultivariateNormal
-            Distribution of size [batch_size x state_dim x num_particles].
+        output_distribution: List of MultivariateNormal
+            list w/ len dim_output of MultivariateNormal [batch_size x num_particles].
 
         """
         if type(state) is Tensor:
@@ -65,16 +76,26 @@ class Emissions(Likelihood):
                 state.loc[:, i:(i+1)],
                 state.covariance_matrix[:, i:(i + 1), i:(i + 1)]))
                 for i in range(self.dim_outputs)]
+        elif type(state) is list:
+            return [self.likelihoods[i](state[i]) for i in range(self.dim_outputs)]
         else:
             raise TypeError('Type {} of state not understood'.format(type(state)))
 
-    def __str__(self) -> str:
-        """Return recognition model parameters as a string."""
-        string = ""
-        for i in range(self.dim_outputs):
-            string += "component {} {}".format(
-                i, str(self.likelihoods[i].noise_covar.noise.detach()))
-        return string
+    def forward(self, state: List[Tensor], *args, **kwargs
+                ) -> List[MultivariateNormal]:
+        """Compute the conditional distribution p(y|f) that defines the likelihoods.
+
+        Parameters
+        ----------
+        state: list of Tensor.
+            Samples from function `f`.
+
+        Returns
+        -------
+        y: list of MultivariateNormal.
+            Distribution object (with same shape as `function_samples`).
+        """
+        return [self.likelihoods[i](state[i]) for i in range(self.dim_outputs)]
 
     def noise_covar(self) -> Noise:
         """Return component noise covariance."""
