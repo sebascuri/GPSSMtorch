@@ -119,7 +119,7 @@ class Actuator(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1) -> None:
+                 sequence_length: int = 512, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'actuator.mat'))
 
         inputs = get_data_split(raw_data['u'][np.newaxis], train=train)
@@ -161,7 +161,7 @@ class BallBeam(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1) -> None:
+                 sequence_length: int = 500, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'ballbeam.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -201,7 +201,7 @@ class Drive(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1) -> None:
+                 sequence_length: int = 250, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'drive.mat'))
 
         inputs = get_data_split(
@@ -244,7 +244,7 @@ class Dryer(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1) -> None:
+                 sequence_length: int = 500, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'dryer.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -285,7 +285,7 @@ class Flutter(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1) -> None:
+                 sequence_length: int = 512, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'flutter.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -325,7 +325,7 @@ class GasFurnace(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1) -> None:
+                 sequence_length: int = 148, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'gas_furnace.csv'),
                               skiprows=1, delimiter=',')
 
@@ -366,7 +366,7 @@ class Tank(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1) -> None:
+                 sequence_length: int = 1250, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'tank.mat'))
 
         inputs = get_data_split(raw_data['u'].T[np.newaxis], train=train)
@@ -587,7 +587,7 @@ class KinkFunction(Dataset):
     """
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = None, sequence_stride: int = 1,
+                 sequence_length: int = 60, sequence_stride: int = 1,
                  trajectory_length: int = 120, x0: float = 0.5,
                  process_noise_sd: float = 0.05,
                  observation_noise_sd: float = np.sqrt(0.8)) -> None:

@@ -1,26 +1,42 @@
-dataset: Actuator  #, BallBeam, Drive, Dryer, Flutter, GasFurnace]
-sequence_length: 50
-recognition_length: 1
-num_particles: 20
-batch_size: 16
-num_epochs: 1
+dataset: [Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace]
+sequence_length: 20
 dim_state: 4
-emission:
-  initial_variance: 0.01
+loss_key: 'elbo'
+batch_size: 16
+num_epochs: 10
+learning_rate: 0.1
+
+model:
+  kind: 'PRSSM'
+  num_particles: 20
+
+recognition:
+  length: 1
+  kind: 'output'
+  variance: 1.0
   learnable: True
-transition:
-  initial_variance: 0.01
+emissions:
+  variance: 0.1
   learnable: True
-gp:
+transitions:
+  variance: 0.0001
+  learnable: True
+forward_gps:
+  shared: False
+  mean:
+    kind: 'constant'
   kernel:
-    shared: False
-    initial_scale: 1.0
-    type: rbf
-    ard: 4
-    length_scale: 2.0
+    kind: 'rbf'
+    outputscale: 0.25
+    lengthscale: 2.0
+    ard_num_dims: 5
+    learn_outputscale: True
+    learn_lengthscale: True
   inducing_points:
-    number: 20
+    number_points: 20
     strategy: 'normal'
     scale: 2.0
-    mean: 1.0
-    cov: 1.0
+    learnable: True
+  variational_distribution:
+    learn_mean: True
+    learn_var: True

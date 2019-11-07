@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from gpytorch.distributions import MultivariateNormal
+import copy
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Recognition', 'OutputRecognition']
@@ -13,15 +14,16 @@ __all__ = ['Recognition', 'OutputRecognition']
 class Recognition(nn.Module):
     """Base Class for recognition Module."""
 
-    def __init__(self, dim_states) -> None:
+    def __init__(self, dim_states: int, length: int) -> None:
         super().__init__()
         self.dim_states = dim_states
+        self.length = length
         self.prior = MultivariateNormal(torch.zeros(dim_states),
                                         covariance_matrix=torch.eye(dim_states))
 
     def copy(self):
         """Copy recognition model."""
-        raise NotImplementedError
+        return copy.deepcopy(self)
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""
@@ -56,8 +58,8 @@ class OutputRecognition(Recognition):
     >>> assert type(other) == type(recognition)
     """
 
-    def __init__(self, dim_states: int, variance: float = 1.0) -> None:
-        super().__init__(dim_states)
+    def __init__(self, dim_states: int, length: int = 1, variance: float = 1.0) -> None:
+        super().__init__(dim_states, length)
         self.sd_noise = nn.Parameter(torch.ones(self.dim_states) * np.sqrt(variance),
                                      requires_grad=True)
 
@@ -73,10 +75,6 @@ class OutputRecognition(Recognition):
         cov = torch.diag(self.sd_noise ** 2)
         cov = cov.expand(batch_size, *cov.shape)
         return MultivariateNormal(loc, covariance_matrix=cov)
-
-    def copy(self) -> Recognition:
-        """Copy recognition model."""
-        return OutputRecognition(self.dim_states)
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""

@@ -10,7 +10,6 @@ import torch
 import torch.jit
 from torch import Tensor
 from torch.distributions import kl_divergence
-from typing import List
 
 __author__ = 'Sebastian Curi'
 __all__ = ['PRSSM']
@@ -24,7 +23,6 @@ class PRSSM(SSMSVI):
                  transitions: Transitions,
                  emissions: Emissions,
                  recognition_model: Recognition,
-                 loss_factors: List[float] = None,
                  num_particles: int = 32
                  ) -> None:
         super().__init__()
@@ -36,7 +34,6 @@ class PRSSM(SSMSVI):
         self.prior_recognition = recognition_model.copy()
         self.posterior_recognition = recognition_model.copy()
 
-        self.loss_factors = loss_factors if loss_factors is not None else [1., 1.]
         self.num_particles = num_particles
 
     def properties(self) -> list:
@@ -178,10 +175,7 @@ class PRSSM(SSMSVI):
         if key.lower() == 'log_likelihood':
             return -log_lik
         elif key.lower() == 'elbo':
-            elbo = -(log_lik * self.loss_factors[0]  # / sequence_length
-                     - kl_x1
-                     - kl_u
-                     )
+            elbo = -(log_lik - kl_x1 - kl_u)
             return elbo
         elif key.lower() == 'l2':
             return l2
