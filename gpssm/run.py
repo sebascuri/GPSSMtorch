@@ -3,38 +3,32 @@
 import numpy as np
 from tqdm import tqdm
 import torch
-from torch.utils.data import DataLoader
-from gpytorch.means import ConstantMean
-from gpytorch.likelihoods import GaussianLikelihood
-from gpytorch.kernels import ScaleKernel, RBFKernel
 
+from torch.utils.data import DataLoader
+
+from gpssm.evaluator import Evaluator
 from gpssm.dataset.dataset import Actuator
-from gpssm.models.components.gp import VariationalGP, ModelList
-from gpssm.models.components.transitions import Transitions
-from gpssm.models.components.emissions import Emissions
 from gpssm.models.components.recognition_model import OutputRecognition
 from gpssm.models.prssm import PRSSM
-from gpssm.models.utilities import get_inducing_points
+from gpssm.models.utilities import init_emissions, init_transmissions, init_gps
 from gpssm.plotters.plot_sequences import plot_predictions
 from gpssm.plotters.plot_learning import plot_loss
+import yaml
+
 
 if __name__ == "__main__":
     # Set hyper-parameters
-    inducing_points_conf = {
-        'number': 20,
-        'strategy': 'normal',
-        'scale': 2.0
-    }
-
-    sequence_length = 50
-    recognition_length = 1
+    config_file = 'experiments/small_scale.yaml'
+    config = yaml.load(open(config_file), Loader=yaml.SafeLoader)
+    sequence_length = config.get('sequence_length', 20)
+    recognition_length = config.get('recognition_length', 10)
     num_particles = 20
     batch_size = 16
     learn_inducing_loc = True
     dim_states = 4
     learning_rate = 0.1
     loss_factors = np.array([1.0, 0])
-    num_epochs = 5
+    num_epochs = 1
     loss_key = 'elbo'
 
     train_set = Actuator(train=True, sequence_length=sequence_length)
@@ -46,47 +40,20 @@ if __name__ == "__main__":
     dim_inputs = train_set.dim_inputs
     dim_outputs = train_set.dim_outputs
 
-    # Initialize Components
-    gps = []
-    transitions = []
-
-    mean = ConstantMean()
-    kernel = ScaleKernel(RBFKernel(ard_num_dims=dim_states + dim_inputs))
-    for _ in range(dim_states):
-        inducing_points = get_inducing_points(inducing_points_conf['number'],
-                                              dim_states + dim_inputs,
-                                              inducing_points_conf['strategy'],
-                                              inducing_points_conf['scale'])
-
-        gp = VariationalGP(inducing_points, mean, kernel, learn_inducing_loc)
-
-        # gp.variational_strategy.variational_distribution.variational_mean = (
-        #     nn.Parameter(0.05 ** 2 * torch.ones(num_inducing_points))
-        # )
-        #
-        # gp.variational_strategy.variational_distribution.chol_variational_covar = (
-        #     nn.Parameter(0.01 ** 2 * torch.eye(num_inducing_points))
-        # )
-
-        gp.covar_module.outputscale = 0.5 ** 2
-        gp.covar_module.base_kernel.lengthscale = torch.tensor([2.] * (
-                dim_states + dim_inputs))
-        gps.append(gp)
-
-        transition = GaussianLikelihood()
-        transition.noise_covar.noise = 0.02 ** 2
-        transitions.append(transition)
-
-    gps = ModelList(gps)
-    transitions = Transitions(transitions)
-
-    emissions = []
-    for _ in range(dim_outputs):
-        emission = GaussianLikelihood()
-        emission.noise_covar.noise = 0.1
-        emissions.append(emission)
-
-    emissions = Emissions(likelihoods=emissions)
+    gps = init_gps(dim_states, dim_inputs,
+                   inducing_points_number=20,
+                   inducing_points_strategy='normal',
+                   inducing_points_scale=2.0,
+                   kernel_str='rbf',
+                   kernel_lengthscale=2.0,
+                   kernel_outputscale=0.1,
+                   mean_str='constant',
+                   shared=False
+                   )
+    transitions = init_transmissions(dim_states, initial_variance=0.0001,
+                                     learnable=True, shared=False)
+    emissions = init_emissions(dim_outputs, initial_variance=0.1,
+                               learnable=True, shared=False)
 
     recognition = OutputRecognition(dim_states=dim_states)  # , sd_noise=0.1)
 
@@ -124,13 +91,15 @@ if __name__ == "__main__":
     fig.show()
 
     # Predict
+    evaluator = Evaluator()
     with torch.no_grad():
         for inputs, outputs, states in test_loader:
             model.gp.eval()
             predicted_outputs = model.forward(outputs[:, :recognition_length], inputs)
-
             mean = predicted_outputs.loc.detach().numpy()
             var = predicted_outputs.covariance_matrix.detach().numpy()
+
+            print(evaluator.evaluate(predicted_outputs, outputs))
             var = np.diagonal(var, axis1=-2, axis2=-1)
 
             fig = plot_predictions(mean[0].T, np.sqrt(var[0]).T,

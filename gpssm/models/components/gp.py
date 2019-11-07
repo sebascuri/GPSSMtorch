@@ -7,7 +7,8 @@ from gpytorch.likelihoods import Likelihood
 from gpytorch.means import Mean
 from gpytorch.kernels import Kernel
 from gpytorch.models import AbstractVariationalGP, ExactGP
-from gpytorch.variational import CholeskyVariationalDistribution
+from gpytorch.variational import CholeskyVariationalDistribution, \
+    VariationalDistribution
 from gpytorch.variational import VariationalStrategy
 from gpytorch.models.model_list import AbstractModelList
 from torch.nn import ModuleList
@@ -198,11 +199,14 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
     def __init__(self, inducing_points: torch.tensor,
                  mean: Mean,
                  kernel: Kernel,
-                 learn_inducing_loc: bool = True):
-        num_inducing, input_dims = inducing_points.shape
-        variational_distribution = CholeskyVariationalDistribution(
-            num_inducing_points=num_inducing,
-        )
+                 learn_inducing_loc: bool = True,
+                 variational_distribution: VariationalDistribution = None) -> None:
+
+        if variational_distribution is None:
+            num_inducing, input_dims = inducing_points.shape
+            variational_distribution = CholeskyVariationalDistribution(
+                num_inducing_points=num_inducing,
+            )
         variational_strategy = VariationalStrategy(
             self, inducing_points, variational_distribution,
             learn_inducing_locations=learn_inducing_loc
