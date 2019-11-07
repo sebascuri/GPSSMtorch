@@ -27,7 +27,8 @@ class Evaluator(object):
         return {criterion: getattr(self, criterion)(predictions, true_values)
                 for criterion in self.criteria}
 
-    def loglik(self, predictions: MultivariateNormal, true_values: Tensor) -> float:
+    @staticmethod
+    def loglik(predictions: MultivariateNormal, true_values: Tensor) -> float:
         """Return the log likelihood of the true values under the predictions.
 
         Parameters
@@ -42,9 +43,10 @@ class Evaluator(object):
         -------
         log_likelihood: float.
         """
-        return predictions.log_prob(true_values).sum().items()
+        return predictions.log_prob(true_values).mean().item()
 
-    def rmse(self, predictions: MultivariateNormal, true_values: Tensor) -> float:
+    @staticmethod
+    def rmse(predictions: MultivariateNormal, true_values: Tensor) -> float:
         """Return the RMS error between the true values and the mean predictions.
 
         Parameters
@@ -59,4 +61,5 @@ class Evaluator(object):
         -------
         log_likelihood: float.
         """
-        return (predictions.loc - true_values).pow(2).mean().sqrt()
+        l2 = (predictions.loc - true_values).pow(2).mean(dim=(1, 2))
+        return l2.sqrt().mean().item()
