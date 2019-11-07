@@ -1,24 +1,12 @@
-"""Testing datasets"""
+"""Testing Kink Function dataset."""
 import pytest
-from gpssm.dataset.dataset import *
+from gpssm.dataset.dataset import KinkFunction
 import numpy as np
 import torch
 
-
 datasets = [
-    (Actuator, 1, 1, 512, 512, 1, 1, 1),
-    (BallBeam, 1, 1, 500, 500, 1, 1, 0),
-    (Drive, 3, 3, 250, 250, 1, 1, 0),
-    (Dryer, 1, 1, 500, 500, 1, 1, 0),
-    (Flutter, 1, 1, 512, 512, 1, 1, 0),
-    (GasFurnace, 1, 1, 148, 148, 1, 1, 0),
-    (RoboMove, 1, 1, 25000, 5000, 2, 2, 3),
-    (RoboMoveSimple, 1, 1, 25000, 5000, 2, 4, 4),
-    (Sarcos, 60, 6, 337, 337, 7, 7, 0),
-    (NonLinearSpring, 1, 1, 5000, 5000, 1, 1, 3),
-    (Tank, 1, 1, 1250, 1250, 1, 2, 0),
+    (KinkFunction, 1, 1, 60, 60, 0, 1, 1)
 ]
-
 
 @pytest.fixture(params=[True, False])
 def train(request):
