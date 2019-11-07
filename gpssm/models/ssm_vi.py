@@ -3,15 +3,15 @@
 from abc import ABC, abstractmethod
 from torch import Tensor
 from gpytorch.distributions import MultivariateNormal
-from torch.nn import Module
+import torch.nn as nn
 from typing import Iterator
 
+__author__ = 'Sebastian Curi'
+__all__ = ['SSMSVI']
 
-class SSMSVI(Module, ABC):
+
+class SSMSVI(nn.Module, ABC):
     """Abstract Base Class for Stochastic Variational Inference algorithms on SSMs."""
-
-    def __init__(self):
-        super().__init__()
 
     @abstractmethod
     def loss(self, output_sequence: Tensor, input_sequence: Tensor = None,

@@ -46,6 +46,8 @@ def test_dataset_shapes(train, dataset, sequence_length, sequence_stride):
     dataset = dataset_(train=train, sequence_length=sequence_length,
                        sequence_stride=sequence_stride)
 
+    print(dataset)
+
     assert dataset.inputs.dtype == np.float64
     assert dataset.outputs.dtype == np.float64
     assert dataset.states.dtype == np.float64

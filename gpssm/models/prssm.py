@@ -12,6 +12,9 @@ from torch import Tensor
 from torch.distributions import kl_divergence
 from typing import List
 
+__author__ = 'Sebastian Curi'
+__all__ = ['PRSSM']
+
 
 class PRSSM(SSMSVI):
     """Implementation of PR-SSM algorithm."""
