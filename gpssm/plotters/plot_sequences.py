@@ -66,7 +66,7 @@ def plot_predictions(predicted_mean: np.ndarray, predicted_std: np.ndarray = Non
         if legend:
             axes[idx].legend(loc='best')
 
-    for idx in range(dim_outputs):
+    for idx in range(dim_inputs):
         axes[dim_inputs + idx].plot(true_inputs[idx])
         axes[dim_inputs + idx].set_ylabel('u_{}'.format(idx + 1))
 

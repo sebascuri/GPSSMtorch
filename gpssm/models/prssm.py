@@ -135,7 +135,7 @@ class PRSSM(SSMSVI):
             # Output: Torch (dim_outputs)
             y = output_sequence[:, t]  # .expand(num_particles, batch_size, dim_outputs)
             # y = y.permute(1, 0, 2)
-            assert y.shape == torch.Size([batch_size, dim_inputs])
+            assert y.shape == torch.Size([batch_size, dim_outputs])
 
             ############################################################################
             # Calculate the Log-likelihood and L2-error #
