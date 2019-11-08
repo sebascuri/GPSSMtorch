@@ -7,7 +7,8 @@ import numpy as np
 from gpssm.models.components.emissions import Emissions
 from gpssm.models.components.transitions import Transitions
 from gpssm.models.components.gp import VariationalGP, ModelList
-from gpssm.models.components.recognition_model import Recognition, OutputRecognition
+from gpssm.models.components.recognition_model import Recognition, OutputRecognition, \
+    ZeroRecognition, NNRecognition, ConvRecognition, LSTMRecognition
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean
 from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel, LinearKernel, Kernel
@@ -17,12 +18,17 @@ __author__ = 'Sebastian Curi'
 __all__ = ['init_emissions', 'init_transmissions', 'init_gps', 'init_recognition']
 
 
-def init_recognition(dim_states: int, kind: str = 'output', length: int = 1,
+def init_recognition(dim_outputs: int, dim_inputs: int, dim_states: int,
+                     kind: str = 'output', length: int = 1,
                      variance: float = 0.1, learnable: bool = True) -> Recognition:
     """Initialize Recognition module.
 
     Parameters
     ----------
+    dim_outputs: int.
+        Dimension of output space.
+    dim_inputs: int.
+        Dimension of input space.
     dim_states: int.
         Dimension of state space.
     kind: str.
@@ -40,8 +46,25 @@ def init_recognition(dim_states: int, kind: str = 'output', length: int = 1,
 
     """
     if kind.lower() == 'output':
-        recognition = OutputRecognition(dim_states=dim_states, length=length,
-                                        variance=variance)
+        recognition = OutputRecognition(dim_outputs, dim_inputs, dim_states,
+                                        length=length, variance=variance)
+    elif kind.lower() == 'zero':
+        recognition = ZeroRecognition(dim_outputs, dim_inputs, dim_states,
+                                      length=length, variance=variance)
+    elif kind.lower() == 'nn':
+        recognition = NNRecognition(dim_outputs, dim_inputs, dim_states,
+                                    length=length, variance=variance)
+    elif kind.lower() == 'conv':
+        recognition = ConvRecognition(dim_outputs, dim_inputs, dim_states,
+                                      length=length, variance=variance)
+    elif kind.lower() == 'lstm':
+        recognition = LSTMRecognition(dim_outputs, dim_inputs, dim_states,
+                                      length=length, variance=variance,
+                                      bidirectional=False)
+    elif kind.lower() == 'bi-lstm':
+        recognition = LSTMRecognition(dim_outputs, dim_inputs, dim_states,
+                                      length=length, variance=variance,
+                                      bidirectional=True)
     else:
         raise NotImplementedError('Recognition module {} not implemented.'.format(kind))
 
