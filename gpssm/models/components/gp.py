@@ -233,6 +233,10 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
         return ExactGPModel(train_xu, train_y, likelihood,
                             self.mean_module, self.covar_module)
 
+    def kl_divergence(self) -> torch.Tensor:
+        """Get the KL-Divergence of the Model."""
+        return self.variational_strategy.kl_divergence().mean()
+
 
 class ModelList(AbstractModelList):
     """List of variational models.
@@ -321,9 +325,23 @@ class ModelList(AbstractModelList):
         """Forward propagate all models."""
         return self.forward(*args, **kwargs)
 
-    def sample_gp(self, likelihood: List[Likelihood]) -> AbstractModelList:
+    def sample_gp(self, likelihood: List[Likelihood]) -> 'ModelList':
         """Sample an Exact GP from the variational distribution."""
         m = []
         for iy in range(self.num_outputs):
             m.append(self.models[iy].sample_gp(likelihood[iy]))
         return ModelList(m)
+
+    def kl_divergence(self) -> torch.Tensor:
+        """Get the KL-Divergence of the Model List."""
+        kl_u = torch.tensor(0.)
+        for model in self.models:
+            kl_u += model.kl_divergence()
+        return kl_u
+
+    def get_fantasy_model(self, inputs, targets, **kwargs) -> 'ModelList':
+        """Get a New GP with the inputs/targets."""
+        models = [model.get_fantasy_model(inputs, target_.rsample(), **kwargs)
+                  for (model, target_) in zip(self.models, targets)]
+        return ModelList(models)
+
