@@ -8,7 +8,6 @@ import os
 from .utilities import get_data_split, generate_batches, generate_trajectory, Normalizer
 from typing import NewType
 
-
 __author__ = 'Sebastian Curi'
 __all__ = ['Actuator', 'BallBeam', 'Drive', 'Dryer', 'Flutter', 'GasFurnace', 'Tank',
            'Sarcos', 'NonLinearSpring', 'RoboMove', 'RoboMoveSimple', 'KinkFunction',
@@ -45,7 +44,8 @@ class Dataset(data.TensorDataset):
 
         assert outputs.ndim == 3, 'Outputs shape is [n_experiment, time, dim]'
         self.num_experiments, self.experiment_length, self.dim_outputs = outputs.shape
-        self.outputs = generate_batches(outputs, sequence_length, sequence_stride)
+        self._sequence_length = sequence_length
+        self._sequence_stride = sequence_stride
 
         if inputs is not None:
             assert inputs.ndim == 3, 'Inputs shape is [n_experiment, time, dim]'
@@ -57,7 +57,6 @@ class Dataset(data.TensorDataset):
             inputs = np.zeros((self.num_experiments, self.experiment_length, 0))
 
         self.dim_inputs = inputs.shape[2]
-        self.inputs = generate_batches(inputs, sequence_length, sequence_stride)
 
         if states is not None:
             assert states.ndim == 3, 'States shape is [n_experiment, time, dim]'
@@ -69,16 +68,19 @@ class Dataset(data.TensorDataset):
             states = np.zeros((self.num_experiments, self.experiment_length, 0))
 
         self.dim_states = states.shape[2]
-        self.states = generate_batches(states, sequence_length, sequence_stride)
 
-        self.input_normalizer = Normalizer(self.inputs)
-        self.output_normalizer = Normalizer(self.outputs)
-        self.state_normalizer = Normalizer(self.states)
+        # Store normalized inputs, outputs, states.
+        self.input_normalizer = Normalizer(inputs)
+        self.output_normalizer = Normalizer(outputs)
+        self.state_normalizer = Normalizer(states)
 
-        super().__init__(torch.tensor(self.input_normalizer(self.inputs)).float(),
-                         torch.tensor(self.output_normalizer(self.outputs)).float(),
-                         torch.tensor(self.state_normalizer(self.states)).float()
-                         )
+        self.inputs = self.input_normalizer(inputs)
+        self.outputs = self.output_normalizer(outputs)
+        self.states = self.state_normalizer(states)
+
+        super().__init__(*[torch.tensor(
+            generate_batches(x, self._sequence_length, self._sequence_stride)).float()
+                           for x in [self.inputs, self.outputs, self.states]])
 
     def __str__(self):
         """Return string with dataset statistics."""
@@ -92,6 +94,24 @@ class Dataset(data.TensorDataset):
             self.experiment_length, self.outputs.shape[0]
         )
         return string
+
+    @property
+    def sequence_length(self) -> int:
+        """Get sequence length."""
+        return self._sequence_length
+
+    @sequence_length.setter
+    def sequence_length(self, new_seq_length):
+        """Set sequence length and reshape the tensors.
+
+        Parameters
+        ----------
+        new_seq_length: int.
+        """
+        self._sequence_length = new_seq_length
+        self.tensors = [torch.tensor(
+            generate_batches(x, self._sequence_length, self._sequence_stride)).float()
+                        for x in [self.inputs, self.outputs, self.states]]
 
 
 class Actuator(Dataset):
