@@ -19,7 +19,7 @@ class PRSSM(SSMSVI):
     """Implementation of PR-SSM algorithm."""
 
     def __init__(self,
-                 gp_model: ModelList,
+                 forward_model: ModelList,
                  transitions: Transitions,
                  emissions: Emissions,
                  recognition_model: Recognition,
@@ -27,8 +27,8 @@ class PRSSM(SSMSVI):
                  cubic_sampling: bool = False
                  ) -> None:
         super().__init__()
-        self.dim_states = gp_model.num_outputs
-        self.gp = gp_model
+        self.dim_states = forward_model.num_outputs
+        self.forward_model = forward_model
         self.transitions = transitions
         self.emissions = emissions
 
@@ -41,7 +41,7 @@ class PRSSM(SSMSVI):
     def properties(self) -> list:
         """Return list of learnable parameters."""
         return [
-            {'params': self.gp.parameters()},
+            {'params': self.forward_model.parameters()},
             {'params': self.emissions.parameters()},
             {'params': self.transitions.parameters()},
             {'params': self.prior_recognition.parameters()},
@@ -51,7 +51,7 @@ class PRSSM(SSMSVI):
     def __str__(self) -> str:
         """Return string of object with parameters."""
         string = "PRSSM Parameters: \n\n"
-        string += "GP {}\n".format(self.gp)
+        string += "GP {}\n".format(self.forward_model)
         string += "Emission {}\n".format(self.emissions)
         string += "Transition {}\n".format(self.transitions)
         string += "Prior x1 {}\n".format(self.prior_recognition)
@@ -95,10 +95,10 @@ class PRSSM(SSMSVI):
         outputs = []
         if self.cubic_sampling:
             # TODO: Change inducing points only (and inducing variables) :).
-            gp_model = self.gp.sample_gp(self.transitions.likelihoods)
-            gp_model.eval()
+            forward_model = self.forward_model.sample_gp(self.transitions.likelihoods)
+            forward_model.eval()
         else:
-            gp_model = self.gp
+            forward_model = self.forward_model
 
         for t in range(sequence_length):
             ############################################################################
@@ -123,7 +123,7 @@ class PRSSM(SSMSVI):
                 [batch_size, num_particles, dim_inputs + self.dim_states])
 
             # next_f: Multivariate Normal (batch_size x state_dim x num_particles)
-            next_f = gp_model(state_input)
+            next_f = forward_model(state_input)
 
             for ix in range(self.dim_states):
                 assert next_f[ix].loc.shape == torch.Size([batch_size, num_particles])
@@ -146,8 +146,8 @@ class PRSSM(SSMSVI):
             # Update GP (ONLY IN CUBIC SAMPLING SCHEME)#
             ############################################################################
             if self.cubic_sampling:
-                gp_model = gp_model.get_fantasy_model(state_input, next_f)
-            assert gp_model.num_outputs == self.dim_states
+                forward_model = forward_model.get_fantasy_model(state_input, next_f)
+            assert forward_model.num_outputs == self.dim_states
 
             ############################################################################
             # Resample State #

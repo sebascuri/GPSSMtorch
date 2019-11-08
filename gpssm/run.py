@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
         # Initialize Model and Optimizer
         model = PRSSM(
-            gp_model=gps,
+            forward_model=gps,
             transitions=transitions,
             emissions=emissions,
             recognition_model=recognition,
