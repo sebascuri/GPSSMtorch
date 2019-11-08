@@ -1,5 +1,5 @@
 dataset: [Actuator] #, BallBeam, Drive, Dryer, Flutter, GasFurnace]
-sequence_length: 50
+sequence_length: 20
 dim_state: 4
 loss_key: 'elbo'
 batch_size: 16
@@ -27,7 +27,7 @@ forward_gps:
     kind: 'constant'
   kernel:
     kind: 'rbf'
-    outputscale: 0.01
+    outputscale: 0.1
     lengthscale: 2.0
     ard_num_dims: 5
     learn_outputscale: True

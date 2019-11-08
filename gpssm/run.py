@@ -9,8 +9,9 @@ from torch.utils.data import DataLoader
 from gpssm.evaluator import Evaluator
 from gpssm.dataset import get_dataset
 from gpssm.models.prssm import PRSSM
-from gpssm.models.utilities import init_emissions, init_transmissions, init_gps, \
+from gpssm.models.initializers import init_emissions, init_transmissions, init_gps, \
     init_recognition
+from gpssm.models.utilities import approximate_with_normal
 from gpssm.plotters.plot_sequences import plot_predictions
 from gpssm.plotters.plot_learning import plot_loss
 import yaml
@@ -39,7 +40,8 @@ if __name__ == "__main__":
         gps = init_gps(dim_states, dim_inputs, **config.get('forward_gps'))
         transitions = init_transmissions(dim_states, **config.get('transitions'))
         emissions = init_emissions(dim_outputs, **config.get('emissions'))
-        recognition = init_recognition(dim_states, **config.get('recognition'))
+        recognition = init_recognition(dim_outputs, dim_inputs, dim_states,
+                                       **config.get('recognition'))
 
         # Initialize Model and Optimizer
         model = PRSSM(
@@ -60,7 +62,8 @@ if __name__ == "__main__":
                 optimizer.zero_grad()
 
                 # Compute the elbo
-                loss = model.loss(outputs, inputs, states, loss_key)
+                predicted_outputs = model(outputs, inputs)
+                loss = model.loss(predicted_outputs, outputs, inputs, loss_key)
 
                 # Back-propagate
                 loss.backward()
@@ -77,7 +80,8 @@ if __name__ == "__main__":
         with torch.no_grad():
             model.eval()
             for inputs, outputs, states in test_loader:
-                predicted_outputs = model.forward(outputs, inputs)
+                predicted_outputs = model(outputs, inputs)
+                predicted_outputs = approximate_with_normal(predicted_outputs)
                 mean = predicted_outputs.loc.detach().numpy()
                 var = predicted_outputs.covariance_matrix.detach().numpy()
 

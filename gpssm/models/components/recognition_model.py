@@ -83,6 +83,10 @@ class OutputRecognition(Recognition):
         self.sd_noise = nn.Parameter(torch.ones(self.dim_states) * np.sqrt(variance),
                                      requires_grad=True)
 
+    def __str__(self) -> str:
+        """Return recognition model parameters as a string."""
+        return str(self.sd_noise.detach().numpy() ** 2)
+
     def forward(self, output_sequence: Tensor,
                 input_sequence: Tensor) -> MultivariateNormal:
         """Forward execution of the recognition model."""

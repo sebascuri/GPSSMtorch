@@ -2,7 +2,8 @@
 
 import numpy as np
 
-DTYPE = np.float64
+__author__ = 'Sebastian Curi'
+__all__ = ['get_data_split', 'generate_trajectory', 'generate_batches', 'Normalizer']
 
 
 def get_data_split(array: np.ndarray, split_idx: int = None, train: bool = True
@@ -37,7 +38,7 @@ def get_data_split(array: np.ndarray, split_idx: int = None, train: bool = True
     else:
         array = array[:, split_idx:, :]
 
-    return array.astype(DTYPE)
+    return array
 
 
 def generate_batches(array: np.ndarray, sequence_length: int, stride_length: int
