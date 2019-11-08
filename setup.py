@@ -12,7 +12,8 @@ setup(
                       'tqdm>=4.0,<5.0',
                       'torch>=1.1.0',
                       'matplotlib>=3.0',
-                      'gpytorch>=0.3.4'
+                      'gpytorch>=0.3.4',
+                      'yaml>=3.0',
                       ],
     extras_require={
         'test': [
