@@ -80,8 +80,6 @@ class PRSSM(SSMSVI):
             Differentiable loss tensor of sequence.
         """
         key = key if key is not None else 'elbo'
-        num_particles = self.num_particles
-        dim_inputs = input_sequence.shape[-1]
         batch_size, sequence_length, dim_outputs = output_sequence.shape
 
         # Calculate x1 from prior and posterior
@@ -150,8 +148,6 @@ class PRSSM(SSMSVI):
         output_distribution: MultivariateNormal.
             MultivariateNormal of prediction_length x dim_outputs
         """
-        num_particles = self.num_particles
-
         batch_size, recognition_length, dim_outputs = output_sequence.shape
         _, sequence_length, dim_inputs = input_sequence.shape
 
@@ -244,6 +240,7 @@ class PRSSM(SSMSVI):
 
 class PRSSMCubic(PRSSM):
     """Implementation of PR-SSM algorithm with cubic resampling."""
+
     def _loop(self, initial_state_distribution: MultivariateNormal,
               input_sequence: Tensor) -> List[List[MultivariateNormal]]:
         """Generate the output predictions."""

@@ -344,4 +344,3 @@ class ModelList(AbstractModelList):
         models = [model.get_fantasy_model(inputs, target_.rsample(), **kwargs)
                   for (model, target_) in zip(self.models, targets)]
         return ModelList(models)
-

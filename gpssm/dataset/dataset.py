@@ -6,7 +6,6 @@ import numpy as np
 import scipy.io as sio
 import os
 from .utilities import get_data_split, generate_batches, generate_trajectory, Normalizer
-from typing import NewType
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Actuator', 'BallBeam', 'Drive', 'Dryer', 'Flutter', 'GasFurnace', 'Tank',

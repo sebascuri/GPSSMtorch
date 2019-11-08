@@ -66,10 +66,6 @@ def test_dataset_shapes(train, dataset, sequence_length, sequence_stride):
     if (data_size - sequence_length) % sequence_stride > 0:
         num_seq += 1
 
-    assert dataset.inputs.shape == (n_exp * num_seq, sequence_length, dim_u)
-    assert dataset.outputs.shape == (n_exp * num_seq, sequence_length, dim_y)
-    assert dataset.states.shape == (n_exp * num_seq, sequence_length, dim_x)
-
     assert len(dataset) == n_exp * num_seq
 
     inputs, outputs, states = dataset[np.random.choice(len(dataset))]
@@ -80,3 +76,20 @@ def test_dataset_shapes(train, dataset, sequence_length, sequence_stride):
     for tensor in [inputs, outputs, states]:
         assert type(tensor) == torch.Tensor
         assert tensor.dtype == torch.float
+
+    # CHANGE SEQUENCE LENGTH
+    sequence_length = 4
+    dataset.sequence_length = sequence_length
+
+    num_seq = (data_size - sequence_length) // sequence_stride + 1
+    if (data_size - sequence_length) % sequence_stride > 0:
+        num_seq += 1
+
+    assert len(dataset) == n_exp * num_seq
+
+    inputs, outputs, states = dataset[np.random.choice(len(dataset))]
+    assert inputs.shape == (sequence_length, dim_u)
+    assert outputs.shape == (sequence_length, dim_y)
+    assert states.shape == (sequence_length, dim_x)
+
+

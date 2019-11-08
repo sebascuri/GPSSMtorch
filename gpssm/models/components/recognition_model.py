@@ -141,8 +141,7 @@ class NNRecognition(Recognition):
 
 
 class ConvRecognition(Recognition):
-    """Convolutional Recognition Module.
-    """
+    """Convolutional Recognition Module."""
 
     def __init__(self, dim_outputs: int, dim_inputs: int, dim_states: int, length: int,
                  variance: float = 1.0) -> None:
@@ -191,7 +190,7 @@ class ConvRecognition(Recognition):
 
 
 class LSTMRecognition(Recognition):
-    """LSTM Based Recognition"""
+    """LSTM Based Recognition."""
 
     def __init__(self, dim_outputs: int, dim_inputs: int, dim_states: int, length: int,
                  variance: float = 1.0, bidirectional: bool = True) -> None:
