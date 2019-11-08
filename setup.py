@@ -13,7 +13,7 @@ setup(
                       'torch>=1.1.0',
                       'matplotlib>=3.0',
                       'gpytorch>=0.3.4',
-                      'yaml>=3.0',
+                      'PyYAML>=5.0',
                       ],
     extras_require={
         'test': [
