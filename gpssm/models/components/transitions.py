@@ -52,13 +52,7 @@ class Transitions(nn.Module):
             string += "component {} {} ".format(i, noise_str)
         return string
 
-    def __call__(self, next_f: MultivariateNormal, *args, **kwargs
-                 ) -> MultivariateNormal:
-        """See `self.forward'."""
-        return self.forward(next_f, *args, **kwargs)
-
-    def forward(self, f_samples: MultivariateNormal, *args, **kwargs
-                ) -> MultivariateNormal:
+    def forward(self, *args: MultivariateNormal, **kwargs) -> MultivariateNormal:
         """Compute the conditional or marginal distribution of the transmission.
 
          If f_samples is a Tensor (or a List of Tensors) then compute the conditional
@@ -68,7 +62,7 @@ class Transitions(nn.Module):
 
         Parameters
         ----------
-        f_samples: State.
+        args: MultivariateNormal.
             State of dimension dim_state x batch_size x num_particles.
 
         Returns
@@ -76,9 +70,10 @@ class Transitions(nn.Module):
         next_state: MultivariateNormal.
             Next state of dimension dim_state x batch_size x num_particles.
         """
+        f_samples = args[0]
         out = [self.likelihoods[i](MultivariateNormal(
             f_samples.loc[i], f_samples.covariance_matrix[i]
-        ), *args, **kwargs)
+        ), *args[1:], **kwargs)
                for i in range(len(self.likelihoods))]
 
         loc = torch.stack([f.loc for f in out])

@@ -62,25 +62,22 @@ class Emissions(nn.Module):
                 i, str(self.likelihoods[i].noise_covar.noise.detach()))  # type: ignore
         return string
 
-    def __call__(self, state: State, *args, **kwargs
-                 ) -> Normal:
-        """See `self.forward'."""
-        return self.forward(state, *args, **kwargs)
-
-    def forward(self, state: Tensor, *args, **kwargs) -> Normal:
+    def forward(self, *args: Tensor, **kwargs) -> Normal:
         """Compute the conditional distribution of the emissions p(y|f).
 
         Parameters
         ----------
-        state: Tensor.
+        args: Tensor.
             State of dimension batch_size x num_particles x dim_state.
 
         Returns
         -------
         y: Normal.
-            Output of dimension batch_size x num_particles x dim_output.
+            Output of dimension dim_output x batch_size x num_particles.
         """
-        y = [self.likelihoods[i](state[..., i]) for i in range(self.dim_outputs)]
+        state = args[0]
+        y = [self.likelihoods[i](state[..., i], *args[1:], **kwargs)
+             for i in range(self.dim_outputs)]
         loc = torch.stack([yi.loc for yi in y])
         cov = torch.stack([yi.scale for yi in y])
         return Normal(loc, cov)

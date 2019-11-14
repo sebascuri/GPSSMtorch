@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 
 from gpssm.evaluator import Evaluator
 from gpssm.dataset import get_dataset
-from gpssm.models.prssm import PRSSM
+from gpssm.models.ssm_vi import PRSSM
 from gpssm.models.initializers import init_emissions, init_transmissions, init_gps, \
     init_recognition
 from gpssm.models.utilities import approximate_with_normal
@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
         # Predict
         evaluator = Evaluator()
-        with torch.no_grad():
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
             model.eval()
             for inputs, outputs, states in test_loader:
                 predicted_outputs = model(outputs, inputs)
