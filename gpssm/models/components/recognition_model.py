@@ -4,6 +4,7 @@ from torch import Tensor
 import torch
 import torch.nn as nn
 import numpy as np
+from gpytorch import Module
 from gpytorch.distributions import MultivariateNormal
 import copy
 
@@ -12,7 +13,7 @@ __all__ = ['Recognition', 'OutputRecognition', 'ZeroRecognition', 'NNRecognition
            'ConvRecognition', 'LSTMRecognition']
 
 
-class Recognition(nn.Module):
+class Recognition(Module):
     """Base Class for recognition Module.
 
     Parameters
@@ -35,7 +36,7 @@ class Recognition(nn.Module):
         self.dim_states = dim_states
         self.length = length
 
-    def copy(self):
+    def copy(self) -> "Recognition":
         """Copy recognition model."""
         return copy.deepcopy(self)
 
@@ -87,10 +88,10 @@ class OutputRecognition(Recognition):
         """Return recognition model parameters as a string."""
         return str(self.sd_noise.detach().numpy() ** 2)
 
-    def forward(self, output_sequence: Tensor,
-                input_sequence: Tensor) -> MultivariateNormal:
+    def forward(self, *inputs: Tensor) -> MultivariateNormal:
         """Forward execution of the recognition model."""
-        assert output_sequence.ndim == 3
+        output_sequence, input_sequence = inputs
+        assert output_sequence.dim() == 3
         dim_outputs = output_sequence.shape[-1]
         batch_size = output_sequence.shape[0]
 
@@ -104,9 +105,10 @@ class OutputRecognition(Recognition):
 class ZeroRecognition(OutputRecognition):
     """Recognition model that predicts allways a zero mean Multivariate Normal."""
 
-    def forward(self, output_sequence: Tensor,
-                input_sequence: Tensor) -> MultivariateNormal:
+    def forward(self, *inputs: Tensor) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        output_sequence, _ = inputs
+
         batch_size = output_sequence.shape[0]
         loc = torch.zeros(batch_size, self.dim_states)
         cov = torch.diag(self.sd_noise ** 2)
@@ -126,9 +128,10 @@ class NNRecognition(Recognition):
         self.var = nn.Linear(in_features=10, out_features=dim_states)
         self.var.bias = nn.Parameter(torch.ones(self.dim_states) * variance, True)
 
-    def forward(self, output_sequence: Tensor,
-                input_sequence: Tensor) -> MultivariateNormal:
+    def forward(self, *inputs: Tensor) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        output_sequence, input_sequence = inputs
+
         batch_size = output_sequence.shape[0]
 
         # Reshape input/output sequence
@@ -152,31 +155,24 @@ class ConvRecognition(Recognition):
         super().__init__(dim_outputs, dim_inputs, dim_states, length)
         self.conv1 = nn.Conv1d(in_channels=length, out_channels=16, kernel_size=2,
                                stride=1, padding=1)
-        o = int((dim_inputs + dim_outputs + 2 * self.conv1.padding[0]
-                 - self.conv1.dilation[0] * (self.conv1.kernel_size[0] - 1) - 1
-                 ) / self.conv1.stride[0] + 1)
+        o = int((dim_inputs + dim_outputs + 2 * 1 - 1 * (2 - 1) - 1) / 1 + 1)
 
         self.max_pool1 = nn.MaxPool1d(kernel_size=2, stride=2)
 
-        o = int((o + 2 * self.max_pool1.padding
-                 - self.max_pool1.dilation * (self.max_pool1.kernel_size - 1) - 1
-                 ) / self.max_pool1.stride + 1)
+        o = int((o + 2 * 0 - 1 * (2 - 1) - 1) / 2 + 1)
         self.conv2 = nn.Conv1d(in_channels=16, out_channels=32,
                                kernel_size=2, stride=2, padding=1)
-        o = int((o + 2 * self.conv2.padding[0]
-                 - self.conv2.dilation[0] * (self.conv2.kernel_size[0] - 1) - 1
-                 ) / self.conv2.stride[0] + 1)
+        o = int((o + 2 * 1 - 1 * (2 - 1) - 1) / 2 + 1)
         self.max_pool2 = nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
-        o = int((o + 2 * self.max_pool2.padding
-                 - self.max_pool2.dilation * (self.max_pool2.kernel_size - 1) - 1
-                 ) / self.max_pool2.stride + 1)
+        o = int((o + 2 * 1 - 1 * (2 - 1) - 1) / 2 + 1)
         self.mean = nn.Linear(in_features=32 * o, out_features=dim_states)
         self.var = nn.Linear(in_features=32 * o, out_features=dim_states)
         self.var.bias = nn.Parameter(torch.ones(self.dim_states) * variance, True)
 
-    def forward(self, output_sequence: Tensor,
-                input_sequence: Tensor) -> MultivariateNormal:
+    def forward(self, *inputs: Tensor) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        output_sequence, input_sequence = inputs
+
         batch_size = output_sequence.shape[0]
 
         # Reshape input/output sequence
@@ -185,10 +181,9 @@ class ConvRecognition(Recognition):
         io_sequence = torch.cat((output_sequence, input_sequence), dim=-1)
 
         # Forward Propagate.
-        x = io_sequence
-        x = self.max_pool1(torch.relu(self.conv1(x)))
-        x = self.max_pool2(torch.relu(self.conv2(x)))
-        x = x.view(batch_size, -1)
+        x = self.max_pool1(torch.relu(self.conv1(io_sequence)))
+        x = self.max_pool2(torch.relu(self.conv2(x)))  # type: ignore
+        x = x.view(batch_size, -1)  # type: ignore
         return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
             nn.functional.softplus(self.var(x))))
 
@@ -206,9 +201,10 @@ class LSTMRecognition(Recognition):
         self.var = nn.Linear(in_features=in_features, out_features=dim_states)
         self.var.bias = nn.Parameter(torch.ones(self.dim_states) * variance, True)
 
-    def forward(self, output_sequence: Tensor,
-                input_sequence: Tensor) -> MultivariateNormal:
+    def forward(self, *inputs: Tensor) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        output_sequence, input_sequence = inputs
+
         batch_size = output_sequence.shape[0]
 
         # Reshape input/output sequence

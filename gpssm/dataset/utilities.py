@@ -1,6 +1,7 @@
 """Utility functions for datasets."""
 
 import numpy as np
+from typing import Callable, Tuple
 
 __author__ = 'Sebastian Curi'
 __all__ = ['get_data_split', 'generate_trajectory', 'generate_batches', 'Normalizer']
@@ -95,12 +96,12 @@ def generate_batches(array: np.ndarray, sequence_length: int, stride_length: int
     return np.stack(sequences, axis=0)
 
 
-def generate_trajectory(transition_function: callable, observation_function: callable,
+def generate_trajectory(transition_function: Callable, observation_function: Callable,
                         inputs: np.ndarray = None, trajectory_length: int = 120,
                         x0: np.ndarray = np.array(0.5),
                         process_noise_sd: np.ndarray = np.array(0.05),
                         observation_noise_sd: np.ndarray = np.array(np.sqrt(0.8))
-                        ) -> (np.ndarray, np.ndarray):
+                        ) -> Tuple[np.ndarray, np.ndarray]:
     """Generate a trajectory.
 
     The trajectory is generated as:

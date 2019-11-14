@@ -57,7 +57,8 @@ class Transitions(Likelihood):
         """Return transition model parameters as a string."""
         string = ""
         for i in range(len(self.likelihoods)):
-            noise_str = str(self.likelihoods[i].noise_covar.noise.detach())
+            noise_str = str(
+                self.likelihoods[i].noise_covar.noise.detach())  # type: ignore
             string += "component {} {} ".format(i, noise_str)
         return string
 
@@ -87,4 +88,5 @@ class Transitions(Likelihood):
             List of length dim_state of MultivariateNormal with dimension batch_size x
             num_particles.
         """
-        return [l(f, *args, **kwargs) for l, f in zip(self.likelihoods, f_samples)]
+        return [l(f, *args, **kwargs)
+                for l, f in zip(self.likelihoods, f_samples)]  # type: ignore

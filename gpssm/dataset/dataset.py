@@ -43,6 +43,8 @@ class Dataset(data.TensorDataset):
 
         assert outputs.ndim == 3, 'Outputs shape is [n_experiment, time, dim]'
         self.num_experiments, self.experiment_length, self.dim_outputs = outputs.shape
+        if sequence_length is None:
+            sequence_length = self.experiment_length
         self._sequence_length = sequence_length
         self._sequence_stride = sequence_stride
 

@@ -1,6 +1,7 @@
 """Implementation of GP Models."""
 
 import torch
+from torch import Tensor
 from abc import ABC, abstractmethod
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.likelihoods import Likelihood
@@ -35,7 +36,7 @@ class GPSSM(ABC):
         self.covar_module = kernel
 
     @abstractmethod
-    def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
+    def __call__(self, state_input: Tensor, **kwargs) -> MultivariateNormal:
         """Call a GP-SSM at a given state-input pair."""
         raise NotImplementedError
 
@@ -57,10 +58,10 @@ class ExactGPModel(GPSSM, ExactGP):
 
     Parameters
     ----------
-    train_inputs: torch.tensor.
+    train_inputs: Tensor
         Tensor of states with shape [sequence_length x dimension].
 
-    train_outputs: torch.tensor.
+    train_outputs: Tensor.
         Tensor of outputs with shape [dimension x sequence_length].
 
     likelihood: Likelihood.
@@ -108,8 +109,8 @@ class ExactGPModel(GPSSM, ExactGP):
     """
 
     def __init__(self,
-                 train_inputs: torch.tensor,
-                 train_outputs: torch.tensor,
+                 train_inputs: Tensor,
+                 train_outputs: Tensor,
                  likelihood: Likelihood,
                  mean: Mean,
                  kernel: Kernel) -> None:
@@ -121,11 +122,11 @@ class ExactGPModel(GPSSM, ExactGP):
         ExactGP.__init__(self, train_inputs, train_outputs, likelihood)
         GPSSM.__init__(self, mean, kernel)
 
-    def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
+    def __call__(self, state_input: Tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
         return ExactGP.__call__(self, state_input, **kwargs)
 
-    def forward(self, state_input: torch.tensor) -> MultivariateNormal:
+    def forward(self, state_input: Tensor) -> MultivariateNormal:
         """Forward call of GP class."""
         mean_x = self.mean_module(state_input)
         covar_x = self.covar_module(state_input)
@@ -137,7 +138,7 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
 
     Parameters
     ----------
-    inducing_points: torch.tensor.
+    inducing_points: Tensor.
         Tensor with size [output_dims x num_inducing x input_dims] with location of
         inducing points.
         Note that it is critical that the first dimension is output dim as it needs this
@@ -196,7 +197,7 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
     >>> assert_allclose(batch.covariance_matrix.shape, torch.Size([8, 4, 4]))
     """
 
-    def __init__(self, inducing_points: torch.tensor,
+    def __init__(self, inducing_points: Tensor,
                  mean: Mean,
                  kernel: Kernel,
                  learn_inducing_loc: bool = True,
@@ -214,11 +215,11 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
         AbstractVariationalGP.__init__(self, variational_strategy)
         GPSSM.__init__(self, mean, kernel)
 
-    def __call__(self, state_input: torch.tensor, **kwargs) -> MultivariateNormal:
+    def __call__(self, state_input: Tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
         return AbstractVariationalGP.__call__(self, state_input, **kwargs)
 
-    def forward(self, state_input: torch.tensor) -> MultivariateNormal:
+    def forward(self, state_input: Tensor) -> MultivariateNormal:
         """Forward call of GP class."""
         mean_x = self.mean_module(state_input)
         covar_x = self.covar_module(state_input)
@@ -233,7 +234,7 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
         return ExactGPModel(train_xu, train_y, likelihood,
                             self.mean_module, self.covar_module)
 
-    def kl_divergence(self) -> torch.Tensor:
+    def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model."""
         return self.variational_strategy.kl_divergence().mean()
 
@@ -293,9 +294,11 @@ class ModelList(AbstractModelList):
     ...     assert_allclose(model_lik.scale, lik.scale)
     """
 
-    def __init__(self, models: List[GPSSM]) -> None:
+    def __init__(self, models: List[VariationalGP]) -> None:
         super().__init__()
-        self.models = ModuleList(models)
+        self.models = models
+        for idx, model in enumerate(models):
+            self.add_module('dim {}'.format(idx), model)
 
     def __str__(self) -> str:
         """Return GP parameters as a string."""
@@ -329,18 +332,18 @@ class ModelList(AbstractModelList):
         """Sample an Exact GP from the variational distribution."""
         m = []
         for iy in range(self.num_outputs):
-            m.append(self.models[iy].sample_gp(likelihood[iy]))
+            m.append(self.models[iy].sample_gp(likelihood[iy]))  # type: ignore
         return ModelList(m)
 
-    def kl_divergence(self) -> torch.Tensor:
+    def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model List."""
         kl_u = torch.tensor(0.)
-        for model in self.models:
+        for model in self.models:  # type: ignore# type: ignore
             kl_u += model.kl_divergence()
         return kl_u
 
     def get_fantasy_model(self, inputs, targets, **kwargs) -> 'ModelList':
         """Get a New GP with the inputs/targets."""
         models = [model.get_fantasy_model(inputs, target_.rsample(), **kwargs)
-                  for (model, target_) in zip(self.models, targets)]
+                  for (model, target_) in zip(self.models, targets)]  # type: ignore
         return ModelList(models)

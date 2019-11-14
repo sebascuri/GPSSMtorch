@@ -62,7 +62,7 @@ class Emissions(Likelihood):
         string = ""
         for i in range(self.dim_outputs):
             string += "component {} {}".format(
-                i, str(self.likelihoods[i].noise_covar.noise.detach()))
+                i, str(self.likelihoods[i].noise_covar.noise.detach()))  # type: ignore
         return string
 
     def __call__(self, state: Union[State, List[State]], *args, **kwargs
@@ -92,12 +92,13 @@ class Emissions(Likelihood):
             num_particles.
         """
         if type(state) is Tensor:
-            return [self.likelihoods[i](state[..., i]) for i in range(self.dim_outputs)]
+            return [self.likelihoods[i](state[..., i])  # type: ignore
+                    for i in range(self.dim_outputs)]
 
         elif type(state) is MultivariateNormal:
             return [self.likelihoods[i](MultivariateNormal(
-                state.loc[:, i:(i + 1)],
-                state.covariance_matrix[:, i:(i + 1), i:(i + 1)]))
+                state.loc[:, i:(i + 1)],  # type: ignore
+                state.covariance_matrix[:, i:(i + 1), i:(i + 1)]))  # type: ignore
                 for i in range(self.dim_outputs)]
         elif type(state) is list:
             return [self.likelihoods[i](state[i]) for i in range(self.dim_outputs)]

@@ -60,17 +60,17 @@ class PRSSM(SSMSVI):
         return string
 
     @torch.jit.export
-    def forward(self, output_sequence: Tensor, input_sequence: Tensor
-                ) -> List[List[MultivariateNormal]]:
+    def forward(self, *inputs: Tensor) -> List[List[MultivariateNormal]]:
         """Forward propagate the model.
 
         Parameters
         ----------
-        output_sequence: Tensor.
-            Tensor of output data [batch_size x recognition_length x dim_outputs].
+        inputs: Tensor.
+            output_sequence: Tensor.
+            Tensor of output data [recognition_length x dim_outputs].
 
-        input_sequence: Tensor.
-            Tensor of input data [batch_size x prediction_length x dim_inputs].
+            input_sequence: Tensor.
+            Tensor of input data [prediction_length x dim_inputs].
 
         Returns
         -------
@@ -78,6 +78,7 @@ class PRSSM(SSMSVI):
             List of list of distributions [prediction_length x dim_outputs x
             batch_size x num_particles].
         """
+        output_sequence, input_sequence = inputs
         num_particles = self.num_particles
         batch_size, sequence_length, dim_inputs = input_sequence.shape
 
@@ -95,7 +96,8 @@ class PRSSM(SSMSVI):
         outputs = []
         if self.cubic_sampling:
             # TODO: Change inducing points only (and inducing variables) :).
-            forward_model = self.forward_model.sample_gp(self.transitions.likelihoods)
+            forward_model = self.forward_model.sample_gp(
+                self.transitions.likelihoods)  # type: ignore
             forward_model.eval()
         else:
             forward_model = self.forward_model

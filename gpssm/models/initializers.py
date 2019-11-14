@@ -13,6 +13,7 @@ from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean
 from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel, LinearKernel, Kernel
 from gpytorch.variational import CholeskyVariationalDistribution
+from typing import Tuple
 
 __author__ = 'Sebastian Curi'
 __all__ = ['init_emissions', 'init_transmissions', 'init_gps', 'init_recognition']
@@ -265,7 +266,7 @@ def _parse_kernel(input_size: int, kind: str = 'rbf', ard_num_dims: int = None,
 
 def _parse_inducing_points(dim_inputs: int, number_points: int,
                            strategy: str = 'normal', scale: float = 1,
-                           learnable: bool = True) -> (torch.Tensor, bool):
+                           learnable: bool = True) -> Tuple[torch.Tensor, bool]:
     """Initialize inducing points for variational GP.
 
     Parameters

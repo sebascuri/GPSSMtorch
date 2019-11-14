@@ -1,7 +1,9 @@
-from .dataset import Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace, Dataset
+from .dataset import Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace
+from typing import Type, Union
 
 
-def get_dataset(dataset_: str) -> Dataset:
+def get_dataset(dataset_: str) -> Union[Type[Actuator], Type[BallBeam], Type[Drive],
+                                        Type[Dryer], Type[Flutter], Type[GasFurnace]]:
     """Get Dataset."""
     if dataset_.lower() == 'actuator':
         return Actuator

@@ -6,7 +6,7 @@ from gpytorch.distributions import MultivariateNormal
 import torch
 import torch.nn as nn
 from torch.distributions import kl_divergence
-from typing import Iterator, List
+from typing import List
 
 __author__ = 'Sebastian Curi'
 __all__ = ['SSMSVI']
@@ -39,8 +39,10 @@ class SSMSVI(nn.Module, ABC):
         """
         key = key if key is not None else 'elbo'
         batch_size, sequence_length, dim_outputs = output_sequence.shape
-        qx1 = self.posterior_recognition(output_sequence, input_sequence)
-        px1 = self.prior_recognition(output_sequence, input_sequence)
+        qx1 = self.posterior_recognition(output_sequence,  # type: ignore
+                                         input_sequence)
+
+        px1 = self.prior_recognition(output_sequence, input_sequence)  # type: ignore
 
         log_lik = torch.tensor(0.)
         l2 = torch.tensor(0.)
@@ -63,7 +65,7 @@ class SSMSVI(nn.Module, ABC):
         ################################################################################
         # Add KL Divergences #
         ################################################################################
-        kl_u = self.forward_model.kl_divergence()
+        kl_u = self.forward_model.kl_divergence()  # type: ignore
         kl_x1 = kl_divergence(qx1, px1).mean()
 
         ################################################################################
@@ -80,21 +82,22 @@ class SSMSVI(nn.Module, ABC):
         elif key.lower() == 'rmse':
             return torch.sqrt(l2)
         elif key.lower() == 'elbo_separated':
-            return log_lik, kl_x1, kl_u
+            return log_lik, kl_x1, kl_u  # type: ignore
         else:
             raise NotImplementedError("Key {} not implemented".format(key))
 
     @abstractmethod
-    def forward(self, output_sequence: Tensor, input_sequence: Tensor = None
-                ) -> MultivariateNormal:
+    def forward(self, *inputs: Tensor  # type: ignore
+                ) -> List[List[MultivariateNormal]]:
         """Forward propagate the model.
 
         Parameters
         ----------
-        output_sequence: Tensor.
+        inputs: Tensor.
+            output_sequence: Tensor.
             Tensor of output data [recognition_length x dim_outputs].
 
-        input_sequence: Tensor.
+            input_sequence: Tensor.
             Tensor of input data [prediction_length x dim_inputs].
 
         Returns
@@ -105,6 +108,6 @@ class SSMSVI(nn.Module, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def properties(self) -> Iterator:
+    def properties(self) -> list:
         """Return list of learnable parameters."""
         raise NotImplementedError
