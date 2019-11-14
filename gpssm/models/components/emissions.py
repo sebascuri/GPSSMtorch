@@ -2,7 +2,8 @@
 from gpytorch.likelihoods import Likelihood
 from gpytorch.distributions import MultivariateNormal
 from torch import Tensor
-from torch.nn import ModuleList
+from torch.distributions import Normal
+import torch
 from typing import Union, List
 State = Union[Tensor, MultivariateNormal]
 
@@ -27,35 +28,30 @@ class Emissions(Likelihood):
     >>> from torch.testing import assert_allclose
     >>> dim_states, dim_outputs = 3, 2
     >>> num_particles = 8
+    >>> batch_size = 32
     >>> emissions = Emissions([GaussianLikelihood(), GaussianLikelihood()])
     >>> debug_str = str(emissions)
     >>> d = MultivariateNormal(torch.zeros(dim_states), torch.eye(dim_states))
     >>> x = d.rsample(sample_shape=torch.Size([num_particles]))
     >>> c = torch.zeros((dim_states, dim_outputs))
     >>> c[:dim_outputs, :dim_outputs] = torch.eye(dim_outputs)
-    >>> for i in range(dim_outputs):
-    ...     assert_allclose(emissions(x)[i].loc, (x @ c)[:, i])
-    ...     assert_allclose(emissions(x)[i].loc.shape, Size([num_particles]))
-    ...     assert_allclose(emissions(x)[i].scale.shape, Size([num_particles]))
-    >>> loc = torch.randn(num_particles, dim_states)
-    >>> cov = 0.1 * torch.eye(dim_states).expand(num_particles, dim_states, dim_states)
-    >>> d = MultivariateNormal(loc, cov)
-    >>> y = emissions(d)
-    >>> for i in range(dim_outputs):
-    ...     assert_allclose(emissions.forward(d)[i].loc[:, 0], loc[:, i])
-    ...     assert_allclose(emissions.forward(d)[i].loc.shape, Size([num_particles, 1]))
-    ...     assert_allclose(emissions.forward(d)[i].covariance_matrix.shape,
-    ...         Size([num_particles, 1, 1]))
-    >>> x = [torch.randn(32, num_particles) for _ in range(dim_states)]
-    >>> for i in range(dim_outputs):
-    ...     assert_allclose(emissions(x)[i].loc.shape, Size([32, num_particles]))
-    ...     assert_allclose(emissions(x)[i].scale.shape, Size([32, num_particles]))
+    >>> y = emissions(x)
+    >>> assert_allclose(y.loc, x[:, :dim_outputs].t())
+    >>> assert y.loc.shape == Size([dim_outputs, num_particles])
+    >>> assert y.scale.shape == Size([dim_outputs, num_particles])
+    >>> x = d.rsample(sample_shape=torch.Size([batch_size, num_particles]))
+    >>> y = emissions(x)
+    >>> assert_allclose(y.loc, x[:, :, :dim_outputs].permute(2, 0, 1))
+    >>> assert y.loc.shape == Size([dim_outputs, batch_size, num_particles])
+    >>> assert y.scale.shape == Size([dim_outputs, batch_size, num_particles])
     """
 
     def __init__(self, likelihoods: List[Likelihood]) -> None:
         super().__init__()
         self.dim_outputs = len(likelihoods)
-        self.likelihoods = ModuleList(likelihoods)
+        self.likelihoods = likelihoods
+        for idx, likelihood in enumerate(likelihoods):
+            self.add_module('emission_{}'.format(idx), likelihood)
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""
@@ -65,43 +61,25 @@ class Emissions(Likelihood):
                 i, str(self.likelihoods[i].noise_covar.noise.detach()))  # type: ignore
         return string
 
-    def __call__(self, state: Union[State, List[State]], *args, **kwargs
-                 ) -> List[MultivariateNormal]:
+    def __call__(self, state: State, *args, **kwargs
+                 ) -> Normal:
         """See `self.forward'."""
         return self.forward(state, *args, **kwargs)
 
-    def forward(self, state: Union[State, List[State]], *args, **kwargs
-                ) -> List[MultivariateNormal]:
-        """Compute the conditional or marginal distribution of the emissions.
-
-         If f_samples is a Tensor (or a List of Tensors) then compute the conditional
-         p(y|f).
-         If f_samples is a MultivariateNormal (or a List of Multivariate Normals) then
-         compute the marginal p(y).
+    def forward(self, state: Tensor, *args, **kwargs) -> Normal:
+        """Compute the conditional distribution of the emissions p(y|f).
 
         Parameters
         ----------
-        state: State or List of State.
-            State of dimension dim_state x batch_size x num_particles or a list of
-            length dim_state of State with dimension batch_size x num_particles.
+        state: Tensor.
+            State of dimension batch_size x num_particles x dim_state.
 
         Returns
         -------
-        y: list of MultivariateNormal.
-            List of length dim_output of MultivariateNormal with dimension batch_size x
-            num_particles.
+        y: Normal.
+            Output of dimension batch_size x num_particles x dim_output.
         """
-        if type(state) is Tensor:
-            return [self.likelihoods[i](state[..., i])  # type: ignore
-                    for i in range(self.dim_outputs)]
-
-        elif type(state) is MultivariateNormal:
-            return [self.likelihoods[i](MultivariateNormal(
-                state.loc[:, i:(i + 1)],  # type: ignore
-                state.covariance_matrix[:, i:(i + 1), i:(i + 1)]))  # type: ignore
-                for i in range(self.dim_outputs)]
-        elif type(state) is list:
-            return [self.likelihoods[i](state[i]) for i in range(self.dim_outputs)]
-        else:
-            raise NotImplementedError('Type {} of state not implemented'.format(
-                type(state)))
+        y = [self.likelihoods[i](state[..., i]) for i in range(self.dim_outputs)]
+        loc = torch.stack([yi.loc for yi in y])
+        cov = torch.stack([yi.scale for yi in y])
+        return Normal(loc, cov)

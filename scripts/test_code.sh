@@ -53,4 +53,4 @@ then
 else
     ignore_dir=""
 fi
-pytest $module --ignore=$ignore_dir || { exit 1; }
+pytest $module --mypy --ignore=$ignore_dir || { exit 1; }

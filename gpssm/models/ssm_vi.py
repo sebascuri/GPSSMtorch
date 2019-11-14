@@ -2,10 +2,9 @@
 
 from abc import ABC, abstractmethod
 from torch import Tensor
-from gpytorch.distributions import MultivariateNormal
 import torch
 import torch.nn as nn
-from torch.distributions import kl_divergence
+from torch.distributions import kl_divergence, Normal
 from typing import List
 
 __author__ = 'Sebastian Curi'
@@ -16,15 +15,14 @@ class SSMSVI(nn.Module, ABC):
     """Abstract Base Class for Stochastic Variational Inference algorithms on SSMs."""
 
     @torch.jit.export
-    def loss(self, predicted_outputs: List[List[MultivariateNormal]],
-             output_sequence: Tensor, input_sequence: Tensor,
-             key: str = None) -> Tensor:
+    def loss(self, predicted_outputs: List[Normal], output_sequence: Tensor,
+             input_sequence: Tensor, key: str = None) -> Tensor:
         """Calculate the between the predicted and the true sequence.
 
         Parameters
         ----------
-        predicted_outputs: List[List[MultivariateNormal]].
-            Tensor of output data [batch_size x sequence_length x dim_outputs].
+        predicted_outputs: List[Normal].
+            List of predicted distributions [batch_size x num_particle x dim_outputs].
         output_sequence: Tensor.
             Tensor of output data of size [batch_size x sequence_length x dim_outputs].
         input_sequence: Tensor.
@@ -39,11 +37,6 @@ class SSMSVI(nn.Module, ABC):
         """
         key = key if key is not None else 'elbo'
         batch_size, sequence_length, dim_outputs = output_sequence.shape
-        qx1 = self.posterior_recognition(output_sequence,  # type: ignore
-                                         input_sequence)
-
-        px1 = self.prior_recognition(output_sequence, input_sequence)  # type: ignore
-
         log_lik = torch.tensor(0.)
         l2 = torch.tensor(0.)
         for t in range(sequence_length):
@@ -57,16 +50,17 @@ class SSMSVI(nn.Module, ABC):
             # Calculate the Log-likelihood and L2-error #
             ############################################################################
 
-            for iy in range(dim_outputs):
-                # call mean() to average the losses from different batches.
-                log_lik += y_pred[iy].log_prob(y[..., iy:(iy + 1)]).mean() / dim_outputs
-                l2 += ((y_pred[iy].loc - y[..., iy:(iy + 1)]) ** 2).mean() / dim_outputs
+            log_lik += y_pred.log_prob(y).mean()
+            l2 += ((y_pred.loc - y) ** 2).mean()
 
         ################################################################################
         # Add KL Divergences #
         ################################################################################
         kl_u = self.forward_model.kl_divergence()  # type: ignore
-        kl_x1 = kl_divergence(qx1, px1).mean()
+        kl_x1 = kl_divergence(
+            self.posterior_recognition(output_sequence, input_sequence),  # type: ignore
+            self.prior_recognition(output_sequence, input_sequence)  # type: ignore
+        ).mean()
 
         ################################################################################
         # Return different keys. #
@@ -87,8 +81,7 @@ class SSMSVI(nn.Module, ABC):
             raise NotImplementedError("Key {} not implemented".format(key))
 
     @abstractmethod
-    def forward(self, *inputs: Tensor  # type: ignore
-                ) -> List[List[MultivariateNormal]]:
+    def forward(self, *inputs: Tensor) -> List[Normal]:  # type: ignore
         """Forward propagate the model.
 
         Parameters
@@ -102,8 +95,8 @@ class SSMSVI(nn.Module, ABC):
 
         Returns
         -------
-        output_distribution: MultivariateNormal.
-            MultivariateNormal of prediction_length x dim_outputs
+        output_distribution: Normal.
+            Normal of prediction_length x dim_outputs
         """
         raise NotImplementedError
 

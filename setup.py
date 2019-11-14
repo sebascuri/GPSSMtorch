@@ -20,7 +20,8 @@ setup(
             'pytest>=4.6,<4.7',
             'flake8==3.7.7',
             'pydocstyle==3.0.0',
-            'pytest_cov>=2.7,<3'
+            'pytest_cov>=2.7,<3',
+            'mypy>=0.740'
         ],
     },
     classifiers=[

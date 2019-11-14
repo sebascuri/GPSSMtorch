@@ -1,6 +1,5 @@
 """Implementation of PR-SSM algorithm."""
 
-from gpytorch.distributions import MultivariateNormal
 from .components.gp import ModelList
 from .components.emissions import Emissions
 from .components.transitions import Transitions
@@ -8,7 +7,8 @@ from .components.recognition_model import Recognition
 from .ssm_vi import SSMSVI
 import torch
 import torch.jit
-from torch import Tensor
+from torch import Tensor, Size
+from torch.distributions import Normal
 from typing import List
 
 __author__ = 'Sebastian Curi'
@@ -60,7 +60,7 @@ class PRSSM(SSMSVI):
         return string
 
     @torch.jit.export
-    def forward(self, *inputs: Tensor) -> List[List[MultivariateNormal]]:
+    def forward(self, *inputs: Tensor) -> List[Normal]:
         """Forward propagate the model.
 
         Parameters
@@ -80,6 +80,7 @@ class PRSSM(SSMSVI):
         """
         output_sequence, input_sequence = inputs
         num_particles = self.num_particles
+        dim_states = self.dim_states
         batch_size, sequence_length, dim_inputs = input_sequence.shape
 
         # Initial State: Tensor (batch_size x num_particles x dim_states)
@@ -91,7 +92,7 @@ class PRSSM(SSMSVI):
 
         state = state_d.rsample(sample_shape=torch.Size([num_particles]))
         state = state.permute(1, 0, 2)
-        assert state.shape == torch.Size([batch_size, num_particles, self.dim_states])
+        assert state.shape == Size([batch_size, num_particles, dim_states])
 
         outputs = []
         if self.cubic_sampling:
@@ -117,39 +118,33 @@ class PRSSM(SSMSVI):
             # Input: Torch (batch_size x num_particles x dim_inputs)
             u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
             u = u.permute(1, 0, 2)
-            assert u.shape == torch.Size([batch_size, num_particles, dim_inputs])
+            assert u.shape == Size([batch_size, num_particles, dim_inputs])
 
             # \hat{X}: Torch (batch_size x num_particles x dim_states + dim_inputs)
             state_input = torch.cat((state, u), dim=-1)
-            assert state_input.shape == torch.Size(
-                [batch_size, num_particles, dim_inputs + self.dim_states])
+            assert state_input.shape == Size(
+                [batch_size, num_particles, dim_inputs + dim_states])
 
-            # next_f: Multivariate Normal (batch_size x state_dim x num_particles)
+            # next_f: Multivariate Normal (state_dim x batch_size x num_particles)
             next_f = forward_model(state_input)
+            assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
+            assert next_f.covariance_matrix.shape == Size(
+                [dim_states, batch_size, num_particles, num_particles])
 
-            for ix in range(self.dim_states):
-                assert next_f[ix].loc.shape == torch.Size([batch_size, num_particles])
-                assert next_f[ix].covariance_matrix.shape == torch.Size(
-                    [batch_size, num_particles, num_particles])
-
-            # next_state: Multivariate Normal(state_dim x num_particles)
+            # next_state: Multivariate Normal (state_dim x batch_size x num_particles)
             next_state = self.transitions(next_f)
-            for ix in range(self.dim_states):
-                assert next_state[ix].loc.shape == torch.Size(
-                    [batch_size, num_particles])
-                assert next_state[ix].covariance_matrix.shape == torch.Size(
-                    [batch_size, num_particles, num_particles])
-
-                assert (next_state[ix].loc == next_f[ix].loc).all()
-                assert not (next_state[ix].covariance_matrix == next_f[
-                    ix].covariance_matrix).all()
+            assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
+            assert next_f.covariance_matrix.shape == Size(
+                [dim_states, batch_size, num_particles, num_particles])
+            assert (next_state.loc == next_f.loc).all()
+            assert not (next_state.covariance_matrix == next_f.covariance_matrix).all()
 
             ############################################################################
             # Update GP (ONLY IN CUBIC SAMPLING SCHEME)#
             ############################################################################
             if self.cubic_sampling:
                 forward_model = forward_model.get_fantasy_model(state_input, next_f)
-            assert forward_model.num_outputs == self.dim_states
+            assert forward_model.num_outputs == dim_states
 
             ############################################################################
             # Resample State #
@@ -159,8 +154,7 @@ class PRSSM(SSMSVI):
             # state_d: Multivariate Normal (dim_states)
             # state: Tensor (dim_states x num_particles)
             state_d = next_state
-            state = torch.zeros((batch_size, num_particles, self.dim_states))
-            for ix in range(self.dim_states):
-                state[:, :, ix] = state_d[ix].rsample()
+            state = state_d.rsample().permute(1, 2, 0)
+            assert state.shape == Size([batch_size, num_particles, dim_states])
 
         return outputs

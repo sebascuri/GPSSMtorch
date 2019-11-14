@@ -12,7 +12,6 @@ from gpytorch.variational import CholeskyVariationalDistribution, \
     VariationalDistribution
 from gpytorch.variational import VariationalStrategy
 from gpytorch.models.model_list import AbstractModelList
-from torch.nn import ModuleList
 from typing import List
 
 __author__ = 'Sebastian Curi'
@@ -253,6 +252,7 @@ class ModelList(AbstractModelList):
     >>> from gpytorch.likelihoods import GaussianLikelihood
     >>> from gpytorch.mlls import VariationalELBO, ExactMarginalLogLikelihood
     >>> from torch.testing import assert_allclose
+    >>> from torch import Size
     >>> data_size = 64
     >>> dim_x = 2
     >>> x = torch.randn((data_size, dim_x))
@@ -269,36 +269,25 @@ class ModelList(AbstractModelList):
     >>> likelihoods = [GaussianLikelihood() for _ in range(dim_y)]
     >>> debug_str = str(model)
     >>> assert model.num_outputs == dim_y
-    >>> assert type(model(x)) is list
-    >>> assert type(model(x)[0]) is MultivariateNormal
-    >>> mean_shape = torch.Size([data_size])
-    >>> cov_shape = torch.Size([data_size, data_size])
-    >>> for i in range(dim_y):
-    ...     assert_allclose(model(x)[i].loc.shape, mean_shape)
-    ...     assert_allclose(model(x)[i].covariance_matrix.shape, cov_shape)
+    >>> f = model(x)
+    >>> assert type(f) is MultivariateNormal
+    >>> assert f.loc.shape == Size([dim_x, data_size])
+    >>> assert f.covariance_matrix.shape == Size([dim_x, data_size, data_size])
     >>> x = torch.randn((8, 4, dim_x))
-    >>> mean_shape = torch.Size([8, 4])
-    >>> cov_shape = torch.Size([8, 4, 4])
-    >>> for i in range(dim_y):
-    ...     assert_allclose(model(x)[i].loc.shape, mean_shape)
-    ...     assert_allclose(model(x)[i].covariance_matrix.shape, cov_shape)
-    >>> for i in range(dim_y):
-    ...     assert_allclose(model.forward_i(i, x).loc, model(x)[i].loc)
+    >>> f = model(x)
+    >>> assert type(f) is MultivariateNormal
+    >>> assert f.loc.shape == Size([dim_x, 8, 4])
+    >>> assert f.covariance_matrix.shape == Size([dim_x, 8, 4, 4])
     >>> sampled_model = model.sample_gp(likelihoods)
     >>> assert sampled_model.num_outputs == dim_y
     >>> assert type(sampled_model.models[0]) == ExactGPModel
-    >>> for i in range(dim_y):
-    ...     model_lik = sampled_model.likelihood_i(i, x)
-    ...     lik = likelihoods[i](x)
-    ...     assert_allclose(model_lik.loc, lik.loc)
-    ...     assert_allclose(model_lik.scale, lik.scale)
     """
 
     def __init__(self, models: List[VariationalGP]) -> None:
         super().__init__()
         self.models = models
         for idx, model in enumerate(models):
-            self.add_module('dim {}'.format(idx), model)
+            self.add_module('gp_{}'.format(idx), model)
 
     def __str__(self) -> str:
         """Return GP parameters as a string."""
@@ -322,7 +311,10 @@ class ModelList(AbstractModelList):
 
     def forward(self, *args, **kwargs):
         """Forward propagate all models."""
-        return [model(*args, **kwargs) for model in self.models]
+        next_f = [model(*args, **kwargs) for model in self.models]
+        loc = torch.stack([f.loc for f in next_f])
+        cov = torch.stack([f.covariance_matrix for f in next_f])
+        return MultivariateNormal(loc, cov)
 
     def __call__(self, *args, **kwargs):
         """Forward propagate all models."""
@@ -338,7 +330,7 @@ class ModelList(AbstractModelList):
     def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model List."""
         kl_u = torch.tensor(0.)
-        for model in self.models:  # type: ignore# type: ignore
+        for model in self.models:
             kl_u += model.kl_divergence()
         return kl_u
 

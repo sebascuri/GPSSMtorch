@@ -48,7 +48,8 @@ def init_recognition(dim_outputs: int, dim_inputs: int, dim_states: int,
     """
     if kind.lower() == 'output':
         recognition = OutputRecognition(dim_outputs, dim_inputs, dim_states,
-                                        length=length, variance=variance)
+                                        length=length, variance=variance
+                                        )  # type: Recognition
     elif kind.lower() == 'zero':
         recognition = ZeroRecognition(dim_outputs, dim_inputs, dim_states,
                                       length=length, variance=variance)

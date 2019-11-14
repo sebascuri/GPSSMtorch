@@ -1,5 +1,5 @@
 """Python Script Template."""
-from gpytorch.distributions import MultivariateNormal
+from torch.distributions import Normal
 from torch import Tensor
 
 
@@ -9,7 +9,7 @@ class Evaluator(object):
     def __init__(self):
         self.criteria = ['loglik', 'rmse']
 
-    def evaluate(self, predictions: MultivariateNormal, true_values: Tensor):
+    def evaluate(self, predictions: Normal, true_values: Tensor):
         """Return the RMS error between the true values and the mean predictions.
 
         Parameters
@@ -28,7 +28,7 @@ class Evaluator(object):
                 for criterion in self.criteria}
 
     @staticmethod
-    def loglik(predictions: MultivariateNormal, true_values: Tensor) -> float:
+    def loglik(predictions: Normal, true_values: Tensor) -> float:
         """Return the log likelihood of the true values under the predictions.
 
         Parameters
@@ -46,7 +46,7 @@ class Evaluator(object):
         return predictions.log_prob(true_values).mean().item()
 
     @staticmethod
-    def rmse(predictions: MultivariateNormal, true_values: Tensor) -> float:
+    def rmse(predictions: Normal, true_values: Tensor) -> float:
         """Return the RMS error between the true values and the mean predictions.
 
         Parameters

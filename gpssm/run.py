@@ -3,7 +3,6 @@
 import numpy as np
 from tqdm import tqdm
 import torch
-
 from torch.utils.data import DataLoader
 
 from gpssm.evaluator import Evaluator
@@ -78,19 +77,19 @@ if __name__ == "__main__":
         # Predict
         evaluator = Evaluator()
         with torch.no_grad():
-            model.eval()
+            # model.eval()
             for inputs, outputs, states in test_loader:
                 predicted_outputs = model(outputs, inputs)
                 predicted_outputs = approximate_with_normal(predicted_outputs)
+
                 mean = predicted_outputs.loc.detach().numpy()
-                var = predicted_outputs.covariance_matrix.detach().numpy()
+                scale = predicted_outputs.scale.detach().numpy()
 
                 print(dataset)
                 print(evaluator.evaluate(predicted_outputs, outputs))
-                var = np.diagonal(var, axis1=-2, axis2=-1)
 
                 for i in range(mean.shape[0]):
-                    fig = plot_predictions(mean[i].T, np.sqrt(var[i]).T,
+                    fig = plot_predictions(mean[i].T, np.sqrt(scale[i]).T,
                                            outputs[i].detach().numpy().T,
                                            inputs[i].detach().numpy().T)
                     fig.axes[0].set_title(dataset + ' Predictions')
