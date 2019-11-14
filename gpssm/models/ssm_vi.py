@@ -1,18 +1,48 @@
 """Base Class for System Id using Variational Inference with SSMs."""
 
-from abc import ABC, abstractmethod
 from torch import Tensor
 import torch
+import torch.jit
 import torch.nn as nn
 from torch.distributions import kl_divergence, Normal
 from typing import List
+
+from .components.gp import ModelList
+from .components.emissions import Emissions
+from .components.transitions import Transitions
+from .components.recognition_model import Recognition
+
 
 __author__ = 'Sebastian Curi'
 __all__ = ['SSMSVI']
 
 
-class SSMSVI(nn.Module, ABC):
+class SSMSVI(nn.Module):
     """Abstract Base Class for Stochastic Variational Inference algorithms on SSMs."""
+    def __init__(self,
+                 forward_model: ModelList,
+                 transitions: Transitions,
+                 emissions: Emissions,
+                 recognition_model: Recognition,
+                 ) -> None:
+        super().__init__()
+        self.dim_states = forward_model.num_outputs
+        self.forward_model = forward_model
+        self.transitions = transitions
+        self.emissions = emissions
+
+        self.prior_recognition = recognition_model.copy()
+        self.posterior_recognition = recognition_model.copy()
+
+    def properties(self) -> list:
+        """Return list of learnable parameters."""
+        return [
+            {'params': self.forward_model.parameters()},
+            {'params': self.emissions.parameters()},
+            {'params': self.transitions.parameters()},
+            {'params': self.prior_recognition.parameters()},
+            {'params': self.posterior_recognition.parameters()}
+        ]
 
     @torch.jit.export
     def loss(self, predicted_outputs: List[Normal], output_sequence: Tensor,
@@ -80,7 +110,6 @@ class SSMSVI(nn.Module, ABC):
         else:
             raise NotImplementedError("Key {} not implemented".format(key))
 
-    @abstractmethod
     def forward(self, *inputs: Tensor) -> List[Normal]:  # type: ignore
         """Forward propagate the model.
 
@@ -98,9 +127,4 @@ class SSMSVI(nn.Module, ABC):
         output_distribution: Normal.
             Normal of prediction_length x dim_outputs
         """
-        raise NotImplementedError
-
-    @abstractmethod
-    def properties(self) -> list:
-        """Return list of learnable parameters."""
         raise NotImplementedError

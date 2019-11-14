@@ -1,6 +1,7 @@
 """Implementation of GP Models."""
 
 import torch
+import torch.nn as nn
 from torch import Tensor
 from abc import ABC, abstractmethod
 from gpytorch.distributions import MultivariateNormal
@@ -11,7 +12,6 @@ from gpytorch.models import AbstractVariationalGP, ExactGP
 from gpytorch.variational import CholeskyVariationalDistribution, \
     VariationalDistribution
 from gpytorch.variational import VariationalStrategy
-from gpytorch.models.model_list import AbstractModelList
 from typing import List
 
 __author__ = 'Sebastian Curi'
@@ -238,7 +238,7 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
         return self.variational_strategy.kl_divergence().mean()
 
 
-class ModelList(AbstractModelList):
+class ModelList(nn.Module):
     """List of variational models.
 
     Properties
@@ -301,24 +301,14 @@ class ModelList(AbstractModelList):
         """Get the number of outputs."""
         return len(self.models)
 
-    def forward_i(self, i, *args, **kwargs):
-        """Forward propagate model i."""
-        return self.models[i].forward(*args, **kwargs)
-
-    def likelihood_i(self, i, *args, **kwargs):
-        """Likelihood of model i."""
-        return self.models[i].likelihood(*args, **kwargs)
-
     def forward(self, *args, **kwargs):
         """Forward propagate all models."""
         next_f = [model(*args, **kwargs) for model in self.models]
         loc = torch.stack([f.loc for f in next_f])
         cov = torch.stack([f.covariance_matrix for f in next_f])
+        if not self.training:
+            cov += 1e-6 * torch.eye(cov.shape[-1]).expand(*cov.shape)
         return MultivariateNormal(loc, cov)
-
-    def __call__(self, *args, **kwargs):
-        """Forward propagate all models."""
-        return self.forward(*args, **kwargs)
 
     def sample_gp(self, likelihood: List[Likelihood]) -> 'ModelList':
         """Sample an Exact GP from the variational distribution."""

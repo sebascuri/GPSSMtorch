@@ -26,27 +26,9 @@ class PRSSM(SSMSVI):
                  num_particles: int = 32,
                  cubic_sampling: bool = False
                  ) -> None:
-        super().__init__()
-        self.dim_states = forward_model.num_outputs
-        self.forward_model = forward_model
-        self.transitions = transitions
-        self.emissions = emissions
-
-        self.prior_recognition = recognition_model.copy()
-        self.posterior_recognition = recognition_model.copy()
-
+        super().__init__(forward_model, transitions, emissions, recognition_model)
         self.num_particles = num_particles
         self.cubic_sampling = cubic_sampling
-
-    def properties(self) -> list:
-        """Return list of learnable parameters."""
-        return [
-            {'params': self.forward_model.parameters()},
-            {'params': self.emissions.parameters()},
-            {'params': self.transitions.parameters()},
-            {'params': self.prior_recognition.parameters()},
-            {'params': self.posterior_recognition.parameters()}
-        ]
 
     def __str__(self) -> str:
         """Return string of object with parameters."""
@@ -95,13 +77,13 @@ class PRSSM(SSMSVI):
         assert state.shape == Size([batch_size, num_particles, dim_states])
 
         outputs = []
-        if self.cubic_sampling:
-            # TODO: Change inducing points only (and inducing variables) :).
-            forward_model = self.forward_model.sample_gp(
-                self.transitions.likelihoods)  # type: ignore
-            forward_model.eval()
-        else:
-            forward_model = self.forward_model
+        # if self.cubic_sampling:
+        #     # TODO: Change inducing points only (and inducing variables) :).
+        #     forward_model = self.forward_model.sample_gp(
+        #         self.transitions.likelihoods)  # type: ignore
+        #     forward_model.eval()
+        # else:
+        #     forward_model = self.forward_model
 
         for t in range(sequence_length):
             ############################################################################
@@ -126,7 +108,7 @@ class PRSSM(SSMSVI):
                 [batch_size, num_particles, dim_inputs + dim_states])
 
             # next_f: Multivariate Normal (state_dim x batch_size x num_particles)
-            next_f = forward_model(state_input)
+            next_f = self.forward_model(state_input)
             assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
             assert next_f.covariance_matrix.shape == Size(
                 [dim_states, batch_size, num_particles, num_particles])
@@ -139,12 +121,12 @@ class PRSSM(SSMSVI):
             assert (next_state.loc == next_f.loc).all()
             assert not (next_state.covariance_matrix == next_f.covariance_matrix).all()
 
-            ############################################################################
-            # Update GP (ONLY IN CUBIC SAMPLING SCHEME)#
-            ############################################################################
-            if self.cubic_sampling:
-                forward_model = forward_model.get_fantasy_model(state_input, next_f)
-            assert forward_model.num_outputs == dim_states
+            # ############################################################################
+            # # Update GP (ONLY IN CUBIC SAMPLING SCHEME)#
+            # ############################################################################
+            # if self.cubic_sampling:
+            #     forward_model = forward_model.get_fantasy_model(state_input, next_f)
+            # assert forward_model.num_outputs == dim_states
 
             ############################################################################
             # Resample State #

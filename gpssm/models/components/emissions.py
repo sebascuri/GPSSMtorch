@@ -4,6 +4,7 @@ from gpytorch.distributions import MultivariateNormal
 from torch import Tensor
 from torch.distributions import Normal
 import torch
+import torch.nn as nn
 from typing import Union, List
 State = Union[Tensor, MultivariateNormal]
 
@@ -11,7 +12,7 @@ __author__ = 'Sebastian Curi'
 __all__ = ['Emissions']
 
 
-class Emissions(Likelihood):
+class Emissions(nn.Module):
     """Implementation of Emissions of the first n states.
 
     Parameters

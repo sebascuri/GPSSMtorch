@@ -3,6 +3,7 @@
 import numpy as np
 from tqdm import tqdm
 import torch
+import gpytorch
 from torch.utils.data import DataLoader
 
 from gpssm.evaluator import Evaluator
@@ -17,6 +18,8 @@ import yaml
 
 if __name__ == "__main__":
     # Set hyper-parameters
+    torch.manual_seed(0)
+
     config_file = 'experiments/small_scale.yaml'
     config = yaml.load(open(config_file), Loader=yaml.SafeLoader)
     sequence_length = config.get('sequence_length', 50)
@@ -77,7 +80,7 @@ if __name__ == "__main__":
         # Predict
         evaluator = Evaluator()
         with torch.no_grad():
-            # model.eval()
+            model.eval()
             for inputs, outputs, states in test_loader:
                 predicted_outputs = model(outputs, inputs)
                 predicted_outputs = approximate_with_normal(predicted_outputs)

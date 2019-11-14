@@ -1,6 +1,7 @@
 """Emission model for GPSSM's."""
 from gpytorch.likelihoods import Likelihood
 import torch
+import torch.nn as nn
 from torch import Tensor
 from gpytorch.distributions import MultivariateNormal
 from typing import List, Union
@@ -10,7 +11,7 @@ __author__ = 'Sebastian Curi'
 __all__ = ['Transitions']
 
 
-class Transitions(Likelihood):
+class Transitions(nn.Module):
     """Implementation of Transitions of a GPSSMs.
 
     Parameters
