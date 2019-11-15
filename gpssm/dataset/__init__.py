@@ -1,9 +1,9 @@
-from .dataset import Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace
-from typing import Type, Union
+from .dataset import Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace, Tank, \
+    RoboMoveSimple, RoboMove, Sarcos, KinkFunction, NonLinearSpring, Dataset
+from typing import Type
 
 
-def get_dataset(dataset_: str) -> Union[Type[Actuator], Type[BallBeam], Type[Drive],
-                                        Type[Dryer], Type[Flutter], Type[GasFurnace]]:
+def get_dataset(dataset_: str) -> Type[Dataset]:
     """Get Dataset."""
     if dataset_.lower() == 'actuator':
         return Actuator
@@ -17,5 +17,17 @@ def get_dataset(dataset_: str) -> Union[Type[Actuator], Type[BallBeam], Type[Dri
         return Flutter
     elif dataset_.lower() == 'gasfurnace':
         return GasFurnace
+    elif dataset_.lower() == 'tank':
+        return Tank
+    elif dataset_.lower() == 'sarcos':
+        return Sarcos
+    elif dataset_.lower() == 'kink':
+        return KinkFunction
+    elif dataset_.lower() == 'robomove':
+        return RoboMove
+    elif dataset_.lower() == 'robomovesimple':
+        return RoboMoveSimple
+    elif dataset_.lower() == 'spring':
+        return NonLinearSpring
     else:
         raise NotImplementedError("{}".format(dataset_))

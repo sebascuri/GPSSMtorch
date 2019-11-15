@@ -37,12 +37,18 @@ class Dataset(data.TensorDataset):
 
     """
 
-    def __init__(self, outputs: np.ndarray,
+    dim_outputs = None  # type: int
+    dim_inputs = None  # type: int
+
+    def __init__(self, outputs: np.ndarray = np.empty((1, )),
                  inputs: np.ndarray = None, states: np.ndarray = None,
-                 sequence_length: int = None, sequence_stride: int = 1) -> None:
+                 sequence_length: int = None, sequence_stride: int = 1,
+                 data_dir: str = DATA_DIR, train: bool = True) -> None:
 
         assert outputs.ndim == 3, 'Outputs shape is [n_experiment, time, dim]'
-        self.num_experiments, self.experiment_length, self.dim_outputs = outputs.shape
+        assert self.dim_outputs == outputs.shape[2]
+
+        self.num_experiments, self.experiment_length, _ = outputs.shape
         if sequence_length is None:
             sequence_length = self.experiment_length
         self._sequence_length = sequence_length
@@ -57,7 +63,7 @@ class Dataset(data.TensorDataset):
         else:
             inputs = np.zeros((self.num_experiments, self.experiment_length, 0))
 
-        self.dim_inputs = inputs.shape[2]
+        assert self.dim_inputs == inputs.shape[2]
 
         if states is not None:
             assert states.ndim == 3, 'States shape is [n_experiment, time, dim]'
@@ -135,13 +141,14 @@ class Actuator(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     References
     ----------
     https://github.com/zhenwendai/RGP/tree/master/datasets/system_identification
 
     """
+
+    dim_outputs = 1
+    dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = 512, sequence_stride: int = 1) -> None:
@@ -176,14 +183,15 @@ class BallBeam(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     References
     ----------
     http://homes.esat.kuleuven.be/~smc/daisy/daisydata.html
     [96-004] Data of the ball-and-beam setup in STADIUS
 
     """
+
+    dim_outputs = 1
+    dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = 500, sequence_stride: int = 1) -> None:
@@ -217,13 +225,14 @@ class Drive(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     References
     ----------
     http://homes.esat.kuleuven.be/~smc/daisy/daisydata.html
 
     """
+
+    dim_outputs = 1
+    dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = 250, sequence_stride: int = 1) -> None:
@@ -259,14 +268,15 @@ class Dryer(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     References
     ----------
     http://homes.esat.kuleuven.be/~smc/daisy/daisydata.html
     [96-006] Data of a laboratory setup acting like a hair dryer
 
     """
+
+    dim_outputs = 1
+    dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = 500, sequence_stride: int = 1) -> None:
@@ -300,14 +310,15 @@ class Flutter(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     References
     ----------
     http://homes.esat.kuleuven.be/~smc/daisy/daisydata.html
     [96-008] Wing flutter data
 
     """
+
+    dim_outputs = 1
+    dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = 512, sequence_stride: int = 1) -> None:
@@ -341,13 +352,14 @@ class GasFurnace(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     References
     ----------
     https://openmv.net/info/gas-furnace
 
     """
+
+    dim_outputs = 1
+    dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = 148, sequence_stride: int = 1) -> None:
@@ -382,13 +394,14 @@ class Tank(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     References
     ----------
     https://github.com/zhenwendai/RGP/tree/master/datasets/system_identification
 
     """
+
+    dim_outputs = 2
+    dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = 1250, sequence_stride: int = 1) -> None:
@@ -422,13 +435,14 @@ class Sarcos(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     References
     ----------
     http://www.gaussianprocess.org/gpml/data/
 
     """
+
+    dim_outputs = 7
+    dim_inputs = 7
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
@@ -472,9 +486,10 @@ class NonLinearSpring(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     """
+
+    dim_outputs = 1
+    dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
@@ -509,9 +524,10 @@ class RoboMove(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     """
+
+    dim_outputs = 2
+    dim_inputs = 2
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
@@ -547,9 +563,10 @@ class RoboMoveSimple(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     """
+
+    dim_outputs = 4
+    dim_inputs = 2
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
@@ -589,8 +606,6 @@ class KinkFunction(Dataset):
     sequence_stride: int, optional (default: 1).
         Integer that indicates every how many time-steps the sequences start.
 
-
-
     trajectory_length: int, optional (default = 120).
             Length of trajectory.
 
@@ -610,6 +625,9 @@ class KinkFunction(Dataset):
     In International Conference on Machine Learning (pp. 2931-2940).
 
     """
+
+    dim_outputs = 1
+    dim_inputs = 0
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
                  sequence_length: int = 60, sequence_stride: int = 1,

@@ -1,14 +1,12 @@
-dataset: [Actuator] #, BallBeam, Drive, Dryer, Flutter, GasFurnace]
-sequence_length: 20
+dataset: [Actuator] #, RoboMoveSimple, BallBeam, Drive, Dryer, Flutter, GasFurnace]
+model: 'PRSSM'
+sequence_length: 100
 dim_state: 4
 loss_key: 'elbo'
 batch_size: 16
 num_epochs: 5
 learning_rate: 0.1
-
-model:
-  kind: 'PRSSM'
-  num_particles: 20
+num_particles: 20
 
 recognition:
   length: 1
@@ -29,7 +27,6 @@ forward_gps:
     kind: 'rbf'
     outputscale: 0.1
     lengthscale: 2.0
-    ard_num_dims: 5
     learn_outputscale: True
     learn_lengthscale: True
   inducing_points:

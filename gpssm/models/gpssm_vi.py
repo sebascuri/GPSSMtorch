@@ -1,5 +1,5 @@
 """Base Class for System Id using Variational Inference with SSMs."""
-
+from abc import ABC, abstractmethod
 from torch import Tensor, Size
 import torch
 import torch.jit
@@ -14,11 +14,11 @@ from .components.transitions import Transitions
 from .components.recognition_model import Recognition
 
 __author__ = 'Sebastian Curi'
-__all__ = ['PRSSM', 'CBFSSM']
+__all__ = ['GPSSM', 'PRSSM', 'CBFSSM']
 
 
-class PRSSM(nn.Module):
-    """Implementation of PR-SSM Algorithm."""
+class GPSSM(nn.Module, ABC):
+    """Abstract base clase for GPSSMs."""
 
     def __init__(self,
                  forward_model: ModelList,
@@ -27,7 +27,8 @@ class PRSSM(nn.Module):
                  recognition_model: Recognition,
                  num_particles: int,
                  backward_model: ModelList = None,
-                 cubic_sampling: bool = False
+                 cubic_sampling: bool = False,
+                 key: str = None
                  ) -> None:
         super().__init__()
         self.dim_states = forward_model.num_outputs
@@ -41,6 +42,7 @@ class PRSSM(nn.Module):
 
         self.num_particles = num_particles
         self.cubic_sampling = cubic_sampling
+        self.key = key if key is not None else 'elbo'
 
     def __str__(self) -> str:
         """Return string of object with parameters."""
@@ -67,7 +69,7 @@ class PRSSM(nn.Module):
 
     @torch.jit.export
     def loss(self, predicted_outputs: List[Normal], output_sequence: Tensor,
-             input_sequence: Tensor, key: str = None) -> Tensor:
+             input_sequence: Tensor) -> Tensor:
         """Calculate the between the predicted and the true sequence.
 
         Parameters
@@ -78,15 +80,12 @@ class PRSSM(nn.Module):
             Tensor of output data of size [batch_size x sequence_length x dim_outputs].
         input_sequence: Tensor.
             Tensor of input data of size [batch_size x sequence_length x dim_inputs].
-        key: str, optional.
-            Key to identify the loss.
 
         Returns
         -------
         loss: Tensor.
             Differentiable loss tensor of sequence.
         """
-        key = key if key is not None else 'elbo'
         batch_size, sequence_length, dim_outputs = output_sequence.shape
         log_lik = torch.tensor(0.)
         l2 = torch.tensor(0.)
@@ -117,17 +116,17 @@ class PRSSM(nn.Module):
         # Return different keys. #
         ################################################################################
 
-        if key.lower() == 'log_likelihood':
+        if self.key.lower() == 'log_likelihood':
             return -log_lik
-        elif key.lower() == 'elbo':
+        elif self.key.lower() == 'elbo':
             elbo = -(log_lik - kl_x1 - kl_u)
             return elbo
-        elif key.lower() == 'l2':
+        elif self.key.lower() == 'l2':
             return l2
-        elif key.lower() == 'rmse':
+        elif self.key.lower() == 'rmse':
             return torch.sqrt(l2)
         else:
-            raise NotImplementedError("Key {} not implemented".format(key))
+            raise NotImplementedError("Key {} not implemented".format(self.key))
 
     @torch.jit.export
     def forward(self, *inputs: Tensor, **kwargs) -> List[Normal]:
@@ -249,13 +248,9 @@ class PRSSM(nn.Module):
         assert len(outputs) == sequence_length
         return outputs
 
-    def _condition(self, next_x: MultivariateNormal, next_y: Normal
-                   ) -> MultivariateNormal:
-        """Implement conditioning."""
-        return next_x
-
+    @torch.jit.export
     def _backward(self, output_sequence: Tensor) -> List[Normal]:
-        """Implements backwards pass."""
+        """Implement backwards pass."""
         batch_size, sequence_length, dim_outputs = output_sequence.shape
         dim_states = self.dim_states
         num_particles = self.num_particles
@@ -281,10 +276,27 @@ class PRSSM(nn.Module):
 
         return outputs[::-1]
 
+    @abstractmethod
+    def _condition(self, next_x: MultivariateNormal, next_y: Normal
+                   ) -> MultivariateNormal:
+        """Implement conditioning."""
+        raise NotImplementedError
 
-class CBFSSM(PRSSM):
+
+class PRSSM(GPSSM):
+    """Implementation of PR-SSM Algorithm."""
+
+    @torch.jit.export
+    def _condition(self, next_x: MultivariateNormal, next_y: Normal
+                   ) -> MultivariateNormal:
+        """Implement conditioning."""
+        return next_x
+
+
+class CBFSSM(GPSSM):
     """Conditional Backwards Forwards Algorithm."""
 
+    @torch.jit.export
     def _condition(self, next_x: MultivariateNormal, next_y: Normal
                    ) -> MultivariateNormal:
         """Condition the next_x distribution with the measurements of next_y.
