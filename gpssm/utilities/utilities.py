@@ -9,7 +9,7 @@ from gpytorch.distributions import MultivariateNormal
 from tqdm import tqdm
 from typing import List
 from gpssm.models.gpssm_vi import GPSSM
-from gpssm.plotters.plot_sequences import plot_predictions
+from gpssm.plotters.plot_sequences import plot_pred
 from .evaluator import Evaluator
 
 __author__ = 'Sebastian Curi'
@@ -70,7 +70,7 @@ def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs
     return losses
 
 
-def evaluate(model: GPSSM, dataloader: DataLoader) -> None:
+def evaluate(model: GPSSM, dataloader: DataLoader, plot_list: list) -> Evaluator:
     """Evaluate a model.
 
     Parameters
@@ -79,6 +79,8 @@ def evaluate(model: GPSSM, dataloader: DataLoader) -> None:
         Model to train.
     dataloader: DataLoader.
         Loader to iterate data.
+    plot_list: list of str.
+        list of plotters.
 
     """
     evaluator = Evaluator()
@@ -93,8 +95,10 @@ def evaluate(model: GPSSM, dataloader: DataLoader) -> None:
 
             print(evaluator.evaluate(predicted_outputs, outputs))
 
-            fig = plot_predictions(mean[0].T, np.sqrt(scale[0]).T,
-                                   outputs[0].detach().numpy().T,
-                                   inputs[0].detach().numpy().T)
+            fig = plot_pred(mean[0].T, np.sqrt(scale[0]).T,
+                            outputs[0].detach().numpy().T,
+                            inputs[0].detach().numpy().T)
             fig.axes[0].set_title(dataloader.dataset + ' Predictions')
             fig.show()
+
+    return evaluator

@@ -9,7 +9,7 @@ class Evaluator(object):
     def __init__(self):
         self.criteria = ['loglik', 'rmse']
 
-    def evaluate(self, predictions: Normal, true_values: Tensor):
+    def evaluate(self, predictions: Normal, true_values: Tensor) -> dict:
         """Return the RMS error between the true values and the mean predictions.
 
         Parameters
