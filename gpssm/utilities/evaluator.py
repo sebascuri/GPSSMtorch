@@ -3,13 +3,14 @@ from torch.distributions import Normal
 from torch import Tensor
 
 
-class Evaluator(object):
+class Evaluator(dict):
     """Object that evaluates the predictive performance of a model."""
 
     def __init__(self):
-        self.criteria = ['loglik', 'rmse']
+        self._criteria = ['loglik', 'rmse']
+        super().__init__({criterion: [] for criterion in self._criteria})
 
-    def evaluate(self, predictions: Normal, true_values: Tensor) -> dict:
+    def evaluate(self, predictions: Normal, true_values: Tensor) -> None:
         """Return the RMS error between the true values and the mean predictions.
 
         Parameters
@@ -24,8 +25,8 @@ class Evaluator(object):
         -------
         log_likelihood: float.
         """
-        return {criterion: getattr(self, criterion)(predictions, true_values)
-                for criterion in self.criteria}
+        for criterion in self._criteria:
+            self[criterion].append(getattr(self, criterion)(predictions, true_values))
 
     @staticmethod
     def loglik(predictions: Normal, true_values: Tensor) -> float:

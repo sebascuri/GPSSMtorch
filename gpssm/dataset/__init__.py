@@ -21,7 +21,7 @@ def get_dataset(dataset_: str) -> Type[Dataset]:
         return Tank
     elif dataset_.lower() == 'sarcos':
         return Sarcos
-    elif dataset_.lower() == 'kink':
+    elif dataset_.lower() == 'kinkfunction':
         return KinkFunction
     elif dataset_.lower() == 'robomove':
         return RoboMove

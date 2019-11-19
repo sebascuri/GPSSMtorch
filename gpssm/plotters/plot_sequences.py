@@ -49,8 +49,8 @@ def plot_pred(pred_mean: np.ndarray, pred_std: np.ndarray = None,
         if pred_std is not None:
             axes[idx].fill_between(
                 np.arange(time),
-                (pred_mean - pred_std)[idx],
-                (pred_mean + pred_std)[idx],
+                (pred_mean - sigmas * pred_std)[idx],
+                (pred_mean + sigmas * pred_std)[idx],
                 alpha=0.2, facecolor='blue')
 
         if true_outputs is not None:

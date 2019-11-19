@@ -9,7 +9,7 @@ from gpytorch.distributions import MultivariateNormal
 from tqdm import tqdm
 from typing import List
 from gpssm.models.gpssm_vi import GPSSM
-from gpssm.plotters.plot_sequences import plot_pred
+from gpssm.plotters.plot_sequences import plot_pred, plot_2d, plot_transition
 from .evaluator import Evaluator
 
 __author__ = 'Sebastian Curi'
@@ -67,10 +67,11 @@ def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs
 
             losses.append(loss.item())
 
+        print(model)
     return losses
 
 
-def evaluate(model: GPSSM, dataloader: DataLoader, plot_list: list) -> Evaluator:
+def evaluate(model: GPSSM, dataloader: DataLoader, plot_list: list = None) -> Evaluator:
     """Evaluate a model.
 
     Parameters
@@ -83,9 +84,14 @@ def evaluate(model: GPSSM, dataloader: DataLoader, plot_list: list) -> Evaluator
         list of plotters.
 
     """
+    plot_list = [] if plot_list is None else plot_list
+
+    model_name = model.__class__.__name__
+    data_name = dataloader.dataset.__class__.__name__
+
     evaluator = Evaluator()
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
-        model.eval()
+        # model.eval()
         for inputs, outputs, states in dataloader:
             predicted_outputs = model(outputs, inputs)
             predicted_outputs = approximate_with_normal(predicted_outputs)
@@ -93,12 +99,29 @@ def evaluate(model: GPSSM, dataloader: DataLoader, plot_list: list) -> Evaluator
             mean = predicted_outputs.loc.detach().numpy()
             scale = predicted_outputs.scale.detach().numpy()
 
-            print(evaluator.evaluate(predicted_outputs, outputs))
+            evaluator.evaluate(predicted_outputs, outputs)
 
-            fig = plot_pred(mean[0].T, np.sqrt(scale[0]).T,
-                            outputs[0].detach().numpy().T,
-                            inputs[0].detach().numpy().T)
-            fig.axes[0].set_title(dataloader.dataset + ' Predictions')
-            fig.show()
+            if 'prediction' in plot_list:
+                fig = plot_pred(mean[0].T, np.sqrt(scale[0]).T, outputs[0].numpy().T)
+                fig.gca().set_title('{} {} Prediction'.format(model_name, data_name))
+                fig.show()
+            if '2d' in plot_list:
+                fig = plot_2d(mean[0].T, np.sqrt(scale[0]).T, outputs[0].numpy().T)
+                fig.gca().set_title('{} {} Prediction'.format(model_name, data_name))
+                fig.show()
+            if 'transition' in plot_list:  # only implemented for 1d.
+                gp = model.forward_model.models[0]
+                transition = model.transitions.likelihoods[0]
+                x = torch.arange(-3, 1, 0.1)
+                true_next_x = dataloader.dataset.f(x.numpy())  # type: ignore
+                pred_next_x = transition(gp(x))
+
+                fig = plot_transition(
+                    x.numpy(), true_next_x, pred_next_x.loc.numpy(),
+                    torch.diag(pred_next_x.covariance_matrix).sqrt().numpy())
+                fig.show()
+
+        print(np.array(evaluator['loglik']).mean(),
+              np.array(evaluator['rmse']).mean())
 
     return evaluator

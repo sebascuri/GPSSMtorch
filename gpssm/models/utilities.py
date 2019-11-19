@@ -1,8 +1,6 @@
 """Initializers for SSMVI models."""
 
 import torch
-from torch.nn import Parameter
-
 import numpy as np
 from gpssm.models.components.emissions import Emissions
 from gpssm.models.components.transitions import Transitions
@@ -100,7 +98,7 @@ def init_emissions(dim_outputs: int, variance: float = None, learnable: bool = T
                                                        learnable, shared))
 
 
-def init_transmissions(dim_states: int, variance: float = None, learnable: bool = True,
+def init_transmissions(dim_states: int, variance: float = 0.01, learnable: bool = True,
                        shared: bool = False) -> Transitions:
     """Initialize transmissions model.
 
@@ -125,17 +123,17 @@ def init_transmissions(dim_states: int, variance: float = None, learnable: bool 
                                                          learnable, shared))
 
 
-def init_gps(dim_states: int, dim_inputs: int, kernel: dict, mean: dict,
-             inducing_points: dict, variational_distribution: dict,
+def init_gps(dim_inputs: int, dim_states: int, kernel: dict = None, mean: dict = None,
+             inducing_points: dict = None, variational_distribution: dict = None,
              shared: bool = False) -> ModelList:
     """Initialize GP Model.
 
     Parameters
     ----------
-    dim_states: int.
-        Dimension of hidden states.
     dim_inputs:
         Dimension of inputs.
+    dim_states: int.
+        Dimension of hidden states.
     kernel: dict.
         Dictionary with kernel parameters.
     mean: dict.
@@ -152,6 +150,11 @@ def init_gps(dim_states: int, dim_inputs: int, kernel: dict, mean: dict,
     model: ModelList.
         List with GP Models.
     """
+    mean = mean if mean is not None else dict()
+    kernel = kernel if kernel is not None else dict()
+    inducing_points = inducing_points if inducing_points is not None else dict()
+    var_d = variational_distribution if variational_distribution is not None else dict()
+
     mean_ = _parse_mean(dim_inputs, **mean)
     kernel_ = _parse_kernel(dim_states + dim_inputs, **kernel)
 
@@ -162,7 +165,7 @@ def init_gps(dim_states: int, dim_inputs: int, kernel: dict, mean: dict,
             kernel_ = _parse_kernel(dim_states + dim_inputs, **kernel)
 
         ip, learn = _parse_inducing_points(dim_states + dim_inputs, **inducing_points)
-        var_dist = _parse_var_dist(ip.shape[0], **variational_distribution)
+        var_dist = _parse_var_dist(ip.shape[0], **var_d)
         gp = VariationalGP(ip, mean_, kernel_, learn, var_dist)
 
         gps.append(gp)
@@ -226,9 +229,9 @@ def _parse_mean(input_size: int, kind: str = 'zero') -> Mean:
     """
     if kind.lower() == 'constant':
         mean = ConstantMean()
-    elif kind.lower == 'zero':
+    elif kind.lower() == 'zero':
         mean = ZeroMean()
-    elif kind.lower == 'linear':
+    elif kind.lower() == 'linear':
         mean = LinearMean(input_size=input_size)
     else:
         raise NotImplementedError('Mean function {} not implemented.'.format(kind))
@@ -265,7 +268,7 @@ def _parse_kernel(input_size: int, kind: str = 'rbf', ard_num_dims: int = None,
     return kernel
 
 
-def _parse_inducing_points(dim_inputs: int, number_points: int,
+def _parse_inducing_points(dim_inputs: int, number_points: int = 20,
                            strategy: str = 'normal', scale: float = 1,
                            learnable: bool = True) -> Tuple[torch.Tensor, bool]:
     """Initialize inducing points for variational GP.
@@ -315,16 +318,17 @@ def _parse_inducing_points(dim_inputs: int, number_points: int,
     return ip, learnable
 
 
-def _parse_var_dist(num_points: int,
-                    mean: float = None, var: float = None,
+def _parse_var_dist(num_points: int, mean: float = None, var: float = None,
                     learn_mean: bool = True, learn_var: bool = True
                     ) -> CholeskyVariationalDistribution:
     var_dist = CholeskyVariationalDistribution(num_inducing_points=num_points)
 
-    mean = mean if mean is not None else 1.
-    var = var if var is not None else 1.
+    if mean is not None:
+        var_dist.variational_mean.data = mean * torch.ones(num_points)
+    var_dist.variational_mean.requires_grad = learn_mean
 
-    var_dist.variational_mean = Parameter(mean * torch.ones(num_points), learn_mean)
-    var_dist.chol_variational_covar = Parameter(var * torch.eye(num_points), learn_var)
+    if var is not None:
+        var_dist.chol_variational_covar.data = np.sqrt(var) * torch.eye(num_points)
+    var_dist.chol_variational_covar.requires_grad = learn_var
 
     return var_dist

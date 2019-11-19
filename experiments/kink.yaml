@@ -1,5 +1,5 @@
 dataset:
-  name: [Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace, Tank]
+  name: [KinkFunction]
   sequence_length: 50
 
 optimization:

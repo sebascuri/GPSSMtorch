@@ -40,7 +40,7 @@ class Dataset(data.TensorDataset):
     dim_outputs = None  # type: int
     dim_inputs = None  # type: int
 
-    def __init__(self, outputs: np.ndarray = np.empty((1, )),
+    def __init__(self, outputs: np.ndarray = np.empty((1,)),
                  inputs: np.ndarray = None, states: np.ndarray = None,
                  sequence_length: int = None, sequence_stride: int = 1,
                  data_dir: str = DATA_DIR, train: bool = True) -> None:
@@ -50,7 +50,7 @@ class Dataset(data.TensorDataset):
 
         self.num_experiments, self.experiment_length, _ = outputs.shape
         if sequence_length is None:
-            sequence_length = self.experiment_length
+            sequence_length = min(20, self.experiment_length)
         self._sequence_length = sequence_length
         self._sequence_stride = sequence_stride
 
@@ -120,6 +120,16 @@ class Dataset(data.TensorDataset):
             generate_batches(x, self._sequence_length, self._sequence_stride)).float()
                         for x in [self.inputs, self.outputs, self.states]]
 
+    @staticmethod
+    def f(x: np.ndarray, u: np.ndarray = None) -> np.ndarray:
+        """Transition function."""
+        return x
+
+    @staticmethod
+    def g(x: np.ndarray, u: np.ndarray = None) -> np.ndarray:
+        """Observation function."""
+        return x
+
 
 class Actuator(Dataset):
     """Actuator dataset implementation.
@@ -151,7 +161,7 @@ class Actuator(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = 512, sequence_stride: int = 1) -> None:
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'actuator.mat'))
 
         inputs = get_data_split(raw_data['u'][np.newaxis], train=train)
@@ -194,7 +204,7 @@ class BallBeam(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = 500, sequence_stride: int = 1) -> None:
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'ballbeam.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -235,7 +245,7 @@ class Drive(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = 250, sequence_stride: int = 1) -> None:
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'drive.mat'))
 
         inputs = get_data_split(
@@ -279,7 +289,7 @@ class Dryer(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = 500, sequence_stride: int = 1) -> None:
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'dryer.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -321,7 +331,7 @@ class Flutter(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = 512, sequence_stride: int = 1) -> None:
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'flutter.dat'))
 
         inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
@@ -362,7 +372,7 @@ class GasFurnace(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = 148, sequence_stride: int = 1) -> None:
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'gas_furnace.csv'),
                               skiprows=1, delimiter=',')
 
@@ -404,7 +414,7 @@ class Tank(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = 1250, sequence_stride: int = 1) -> None:
+                 sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'tank.mat'))
 
         inputs = get_data_split(raw_data['u'].T[np.newaxis], train=train)
@@ -630,23 +640,15 @@ class KinkFunction(Dataset):
     dim_inputs = 0
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
-                 sequence_length: int = 60, sequence_stride: int = 1,
+                 sequence_length: int = None, sequence_stride: int = 1,
                  trajectory_length: int = 120, x0: float = 0.5,
                  process_noise_sd: float = 0.05,
                  observation_noise_sd: float = np.sqrt(0.8)) -> None:
 
         file_name = os.path.join(data_dir, 'kink_function.mat')
         if not os.path.exists(file_name):
-            def f(x: np.ndarray, _: np.ndarray) -> np.ndarray:
-                """Kink transition function."""
-                return 0.8 + (x + 0.2) * (1 - 5 / (1 + np.exp(- 2 * x)))
-
-            def g(x: np.ndarray, _: np.ndarray) -> np.ndarray:
-                """Kink observation function."""
-                return x
-
             states, outputs = generate_trajectory(
-                f, g, trajectory_length=trajectory_length, x0=np.array([x0]),
+                self.f, self.g, trajectory_length=trajectory_length, x0=np.array([x0]),
                 process_noise_sd=np.array([process_noise_sd]),
                 observation_noise_sd=np.array([observation_noise_sd]))
 
@@ -669,3 +671,8 @@ class KinkFunction(Dataset):
         super().__init__(outputs=outputs, states=states,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride)
+
+    @staticmethod
+    def f(x: np.ndarray, _: np.ndarray = None) -> np.ndarray:
+        """Kink transition function."""
+        return 0.8 + (x + 0.2) * (1 - 5 / (1 + np.exp(- 2 * x)))

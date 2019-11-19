@@ -18,18 +18,40 @@ __all__ = ['GPSSM', 'PRSSM', 'CBFSSM']
 
 
 class GPSSM(nn.Module, ABC):
-    """Abstract base clase for GPSSMs."""
+    """Base class for GPSSMs inference.
+
+    Parameters
+    ----------
+    forward_model: ModelList.
+        Forwards Model.
+    transitions: Transitions.
+        Transition Model.
+    emissions: Emissions.
+        Emission Model.
+    recognition_model: Recognition.
+        Recognition Model.
+    num_particles: int.
+        Number of Particles for sampling.
+    backward_model: ModelList.
+        Backwards Model.
+    cubic_sampling: bool.
+        Cubic Sampling strategy
+    loss_key: str.
+        Key to identify training.
+
+    # TODO: Implement loss factors.
+    # TODO: Implement cubic sampling.
+    """
 
     def __init__(self,
                  forward_model: ModelList,
                  transitions: Transitions,
                  emissions: Emissions,
                  recognition_model: Recognition,
-                 num_particles: int,
+                 num_particles: int = 20,
                  backward_model: ModelList = None,
                  cubic_sampling: bool = False,
-                 key: str = None
-                 ) -> None:
+                 loss_key: str = 'elbo') -> None:
         super().__init__()
         self.dim_states = forward_model.num_outputs
         self.forward_model = forward_model
@@ -42,7 +64,7 @@ class GPSSM(nn.Module, ABC):
 
         self.num_particles = num_particles
         self.cubic_sampling = cubic_sampling
-        self.key = key if key is not None else 'elbo'
+        self.loss_key = loss_key
 
     def __str__(self) -> str:
         """Return string of object with parameters."""
@@ -116,17 +138,17 @@ class GPSSM(nn.Module, ABC):
         # Return different keys. #
         ################################################################################
 
-        if self.key.lower() == 'log_likelihood':
+        if self.loss_key.lower() == 'log_likelihood':
             return -log_lik
-        elif self.key.lower() == 'elbo':
+        elif self.loss_key.lower() == 'elbo':
             elbo = -(log_lik - kl_x1 - kl_u)
             return elbo
-        elif self.key.lower() == 'l2':
+        elif self.loss_key.lower() == 'l2':
             return l2
-        elif self.key.lower() == 'rmse':
+        elif self.loss_key.lower() == 'rmse':
             return torch.sqrt(l2)
         else:
-            raise NotImplementedError("Key {} not implemented".format(self.key))
+            raise NotImplementedError("Key {} not implemented".format(self.loss_key))
 
     @torch.jit.export
     def forward(self, *inputs: Tensor, **kwargs) -> List[Normal]:
@@ -156,7 +178,6 @@ class GPSSM(nn.Module, ABC):
         if self.training:
             state_d = self.posterior_recognition(output_sequence, input_sequence)
         else:
-            print('evaluating')
             state_d = self.prior_recognition(output_sequence, input_sequence)
 
         state = state_d.rsample(sample_shape=torch.Size([num_particles]))

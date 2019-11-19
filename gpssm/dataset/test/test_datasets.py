@@ -60,7 +60,7 @@ def test_dataset_shapes(train, dataset, sequence_length, sequence_stride):
         data_size = len_test
 
     if sequence_length is None:
-        sequence_length = data_size
+        sequence_length = min(20, data_size)
 
     num_seq = (data_size - sequence_length) // sequence_stride + 1
     if (data_size - sequence_length) % sequence_stride > 0:
