@@ -1,4 +1,6 @@
 data/
+*.obj
+*.pt
 
 # IntelliJ
 .idea

@@ -6,9 +6,11 @@ dataset:
 optimization:
   learning_rate: 0.1
   batch_size: 32
-  num_epochs: 4
+  num_epochs: 5
 
-plots: ['prediction']
+evaluation:
+  plots: ['training_loss', 'prediction']
+  length: [100]  # Here add extra evaluation lengths.
 
 model:
   name: ['PRSSM']  # PRSSM, CBFSSM

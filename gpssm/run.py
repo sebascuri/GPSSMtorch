@@ -4,50 +4,45 @@ import torch
 from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
-from gpssm.utilities.utilities import train, evaluate
+from gpssm.utilities.utilities import train, evaluate, Experiment, save, experiment_dir
 from gpssm.plotters.plot_learning import plot_loss
 
 
-def main(model_name: str, dataset_name: str, config: dict, seed: int = 0,
-         num_threads: int = 2):
+def main(experiment: Experiment, num_threads: int = 2):
     """Run GPSSM inference.
 
     Parameters
     ----------
-    model_name: str.
-        Name of GP-SSM model.
-    dataset_name: str.
-        Name of dataset.
-    config: dict.
-        Dictionary with configurations.
-    seed: int.
-        Random seed.
+    experiment: Experiment.
+        Experiment identifier.
     num_threads: int.
         Number of threads.
 
     # TODO: implement device.
     """
-    torch.manual_seed(seed)
+    exp_dir = experiment_dir(experiment)
+    torch.manual_seed(experiment.seed)
     torch.set_num_threads(num_threads)
 
     # Dataset Parameters
-    dataset_config = config.get('dataset', {})
+    dataset_config = experiment.configs.get('dataset', {})
 
     # Optimizer Parameters
-    optim_config = config.get('optimization', {})
+    optim_config = experiment.configs.get('optimization', {})
     batch_size = optim_config.get('batch_size', 32)
     num_epochs = optim_config.get('num_epochs', 5)
     learning_rate = optim_config.get('learning_rate', 0.01)
 
     # Model Parameters
-    model_config = config.get('model', {})
+    model_config = experiment.configs.get('model', {})
 
-    # Plot Parameters  # TODO: Change to outputs
-    plot_config = config.get('plots', ['prediction'])
+    # Plot Parameters
+    eval_config = experiment.configs.get('evaluation', {})
+    plot_list = eval_config.get('plots', [])
 
     # Initialize dataset, model, and optimizer.
-    dataset = get_dataset(dataset_name)
-    model = get_model(model_name, dataset.dim_outputs, dataset.dim_inputs,
+    dataset = get_dataset(experiment.dataset)
+    model = get_model(experiment.model, dataset.dim_outputs, dataset.dim_inputs,
                       **model_config)
     optimizer = torch.optim.Adam(model.properties(), lr=learning_rate)
 
@@ -55,17 +50,22 @@ def main(model_name: str, dataset_name: str, config: dict, seed: int = 0,
     train_set = dataset(train=True, **dataset_config)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     losses = train(model, train_loader, optimizer, num_epochs)
-    fig = plot_loss(losses, ylabel='ELBO')
-    fig.show()
+    save(experiment, model=model)
 
-    # Predict  # TODO: Predict with two different lengths.
+    if 'training_loss' in plot_list:
+        fig = plot_loss(losses, ylabel=model.loss_key.upper())
+        fig.show()
+        fig.savefig('{}training_loss_{}.png'.format(exp_dir, experiment.seed))
+
+    # Evaluate with different sequence lengths.
     test_set = dataset(train=False, **dataset_config)
-    # test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
-    # evaluate(model, test_loader, config['plots'])
-
-    test_set.sequence_length = test_set.experiment_length
-    test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
-    evaluate(model, test_loader, plot_config)
+    eval_lengths = [train_set.sequence_length, test_set.experiment_length]
+    eval_lengths += eval_config.get('length', [])
+    for eval_length in eval_lengths:
+        test_set.sequence_length = eval_length
+        test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
+        evaluator = evaluate(model, test_loader, experiment, plot_list.copy())
+        save(experiment, **{'eval_{}'.format(test_set.sequence_length): evaluator})
 
 
 if __name__ == "__main__":
@@ -89,4 +89,4 @@ if __name__ == "__main__":
     else:
         configs = {}
 
-    main(args.model, args.dataset, configs, args.seed)
+    main(Experiment(args.model, args.dataset, args.seed, configs), args.num_threads)
