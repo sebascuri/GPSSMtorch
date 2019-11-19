@@ -1,0 +1,50 @@
+dataset:
+  name: [Actuator]
+  sequence_length: 20
+  sequence_stride: 1
+
+optimization:
+  learning_rate: 0.1
+  batch_size: 32
+  num_epochs: 4
+
+plots: ['prediction']
+
+model:
+  name: ['PRSSM']  # PRSSM, CBFSSM
+  dim_states: 1
+  num_particles: 50
+  loss_key: 'elbo'
+
+  recognition:
+    length: 1
+    kind: 'output'  # output, zero, nn, conv, lstm, bi-lstm.
+    variance: 1.0
+    learnable: True
+  emissions:
+    variance: 1.0
+    learnable: True
+  transitions:
+    variance: 0.0001
+    learnable: True
+  forward_gps:
+    shared: False
+    mean:
+      kind: 'zero'  # zero, constant, linear.
+    kernel:
+      kind: 'matern 3/2'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
+      ard_num_dims:  # if empty will automatically select dim_states + dim_inputs.
+      outputscale: 0.1
+      lengthscale: 2.0
+      learn_outputscale: True
+      learn_lengthscale: True
+    inducing_points:
+      number_points: 20
+      strategy: 'normal'
+      scale: 2.0
+      learnable: True
+    variational_distribution:
+      learn_mean: True
+      mean: 0.0
+      learn_var: True
+      var: 1.0
