@@ -104,7 +104,7 @@ class OutputRecognition(Recognition):
 
 
 class ZeroRecognition(OutputRecognition):
-    """Recognition model that predicts allways a zero mean Multivariate Normal."""
+    """Recognition model that predicts always a zero mean Multivariate Normal."""
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
@@ -118,7 +118,7 @@ class ZeroRecognition(OutputRecognition):
 
 
 class NNRecognition(Recognition):
-    """Fully conected Recognition Module."""
+    """Fully connected Recognition Module."""
 
     def __init__(self, dim_outputs: int, dim_inputs: int, dim_states: int, length: int,
                  variance: float = 1.0) -> None:
@@ -128,6 +128,10 @@ class NNRecognition(Recognition):
         self.mean = nn.Linear(in_features=10, out_features=dim_states)
         self.var = nn.Linear(in_features=10, out_features=dim_states)
         self.var.bias = nn.Parameter(torch.ones(self.dim_states) * variance, True)
+
+    def __str__(self) -> str:
+        """Return recognition model parameters as a string."""
+        return str(nn.functional.softplus(self.var.bias.detach()).numpy())
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
@@ -149,7 +153,7 @@ class NNRecognition(Recognition):
 
 
 class ConvRecognition(Recognition):
-    """Convolutional Recognition Module."""
+    """Convolution Recognition Module."""
 
     def __init__(self, dim_outputs: int, dim_inputs: int, dim_states: int, length: int,
                  variance: float = 1.0) -> None:
@@ -171,6 +175,10 @@ class ConvRecognition(Recognition):
         self.mean = nn.Linear(in_features=32 * o, out_features=dim_states)
         self.var = nn.Linear(in_features=32 * o, out_features=dim_states)
         self.var.bias = nn.Parameter(torch.ones(self.dim_states) * variance, True)
+
+    def __str__(self) -> str:
+        """Return recognition model parameters as a string."""
+        return str(nn.functional.softplus(self.var.bias.detach()).numpy())
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
@@ -203,6 +211,10 @@ class LSTMRecognition(Recognition):
         self.mean = nn.Linear(in_features=in_features, out_features=dim_states)
         self.var = nn.Linear(in_features=in_features, out_features=dim_states)
         self.var.bias = nn.Parameter(torch.ones(self.dim_states) * variance, True)
+
+    def __str__(self) -> str:
+        """Return recognition model parameters as a string."""
+        return str(nn.functional.softplus(self.var.bias.detach()).numpy())
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
