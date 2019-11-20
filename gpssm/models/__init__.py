@@ -5,7 +5,7 @@ from .utilities import init_emissions, init_transmissions, init_gps, init_recogn
 def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = None,
               **kwargs) -> GPSSM:
     """Get Model."""
-    dim_states = dim_states if dim_states is not None else dim_outputs
+    dim_states = max(dim_states if dim_states is not None else dim_outputs, dim_outputs)
 
     gps = init_gps(dim_inputs, dim_states, **kwargs.pop('forward_gps', {}))  # type: ignore
     trans = init_transmissions(dim_states, **kwargs.pop('transitions', {}))  # type: ignore
