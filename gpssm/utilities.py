@@ -3,35 +3,101 @@ import numpy as np
 import torch
 import os
 import pickle
+from torch import Tensor
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 from torch.distributions import Normal
 import gpytorch
 from gpytorch.distributions import MultivariateNormal
 from tqdm import tqdm
-from typing import List, Tuple
+from typing import List
 from gpssm.dataset import get_dataset, Dataset
 from gpssm.models import get_model
 from gpssm.models.gpssm_vi import GPSSM
 from gpssm.plotters.plot_sequences import plot_pred, plot_2d, plot_transition
-from .evaluator import Evaluator
 from collections import namedtuple
-
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load']
 
 
-class Experiment(namedtuple('Experiment', ['model', 'dataset', 'seed', 'configs',
-                                           'log_dir', 'fig_dir'])):
+class Evaluator(dict):
+    """Object that evaluates the predictive performance of a model."""
+
+    def __init__(self, sequence_length):
+        self.sequence_length = sequence_length
+        self.criteria = ['loglik', 'rmse']
+        super().__init__({criterion: [] for criterion in self.criteria})
+
+    def evaluate(self, predictions: Normal, true_values: Tensor) -> None:
+        """Return the RMS error between the true values and the mean predictions.
+
+        Parameters
+        ----------
+        predictions: MultivariateNormal.
+            A multivariate normal with loc [time x dim] and covariance (or scale)
+            [time x dim x dim] or [time x dim].
+        true_values: Tensor.
+            A tensor with shape [time x dim].
+
+        Returns
+        -------
+        log_likelihood: float.
+        """
+        for criterion in self.criteria:
+            self[criterion].append(getattr(self, criterion)(predictions, true_values))
+
+    @staticmethod
+    def loglik(predictions: Normal, true_values: Tensor) -> float:
+        """Return the log likelihood of the true values under the predictions.
+
+        Parameters
+        ----------
+        predictions: MultivariateNormal.
+            A multivariate normal with loc [time x dim] and covariance (or scale)
+            [time x dim x dim] or [time x dim].
+        true_values: Tensor.
+            A tensor with shape [time x dim].
+
+        Returns
+        -------
+        log_likelihood: float.
+        """
+        return predictions.log_prob(true_values).mean().item()
+
+    @staticmethod
+    def rmse(predictions: Normal, true_values: Tensor) -> float:
+        """Return the RMS error between the true values and the mean predictions.
+
+        Parameters
+        ----------
+        predictions: MultivariateNormal.
+            A multivariate normal with loc [time x dim] and covariance (or scale)
+            [time x dim x dim] or [time x dim].
+        true_values: Tensor.
+            A tensor with shape [time x dim].
+
+        Returns
+        -------
+        log_likelihood: float.
+        """
+        l2 = (predictions.loc - true_values).pow(2).mean(dim=(1, 2))
+        return l2.sqrt().mean().item()
+
+
+_experiment = namedtuple('Experiment',
+                         ['model', 'dataset', 'seed', 'configs', 'log_dir', 'fig_dir'])
+
+
+class Experiment(_experiment):
     """Experiment Named Tuple."""
 
     def __new__(cls, model: str, dataset: str, seed: int, configs: dict = None):
         """Create new named experiment."""
         log_dir = get_dir(model, dataset, fig_dir=False)
         fig_dir = get_dir(model, dataset, fig_dir=True)
-        return super(Experiment, cls).__new__(
-            cls, model, dataset, seed, configs, log_dir, fig_dir)
+        return super(Experiment, cls).__new__(cls, model, dataset, seed, configs,
+                                              log_dir, fig_dir)
 
 
 def get_dir(model: str, dataset: str, fig_dir: bool = False) -> str:
@@ -139,8 +205,9 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
 
     """
     plot_list = [] if plot_list is None else plot_list
-    evaluator = Evaluator()
     dataset = dataloader.dataset  # type: Dataset  # type: ignore
+    evaluator = Evaluator(dataset.sequence_length)
+
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
         # model.eval()
         for inputs, outputs, states in dataloader:
@@ -217,32 +284,38 @@ def save(experiment: Experiment, **kwargs) -> None:
                 pickle.dump(value, file)
 
 
-def load(experiment: Experiment) -> Tuple[Experiment, GPSSM]:
-    """Load Experiment data and Model.
+def load(experiment: Experiment, key: str) -> list:
+    """Load kwarg from experiments.
 
     Parameters
     ----------
     experiment: Experiment.
         Experiment meata-data.
 
+    key: str.
+        Key to load.
+
     Returns
     -------
-    experiment: Experiment.
-        Experiment with configs.
-
-    model: GPSSM.
-        Initialized model.
+    data: list of data.
 
     """
     save_dir = experiment.log_dir
-    file_name = save_dir + 'experiment_{}.obj'.format(experiment.seed)
-    with open(file_name, 'rb') as file:
-        experiment = pickle.load(file)
+    values = []
 
-    dataset = get_dataset(experiment.dataset)
-    model = get_model(experiment.model, dataset.dim_outputs, dataset.dim_inputs,
-                      **experiment.configs['model'])
-    file_name = save_dir + 'model_{}.pt'.format(experiment.seed)
-    model.load_state_dict(torch.load(file_name))
+    files = list(filter(lambda x: key in x, os.listdir(save_dir)))
+    for file_name in files:
+        if key == 'model':
+            dataset = get_dataset(experiment.dataset)
+            model = get_model(experiment.model, dataset.dim_outputs,
+                              dataset.dim_inputs,
+                              **experiment.configs['model'])
+            model.load_state_dict(torch.load(file_name))
+            values.append(model)
+        else:
+            with open(save_dir + file_name, 'rb') as file:
+                val = pickle.load(file)
 
-    return experiment, model
+            values.append(val)
+
+    return values
