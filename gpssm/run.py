@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
-from gpssm.utilities.utilities import train, evaluate, Experiment, save, experiment_dir
+from gpssm.utilities.utilities import train, evaluate, Experiment, save
 from gpssm.plotters.plot_learning import plot_loss
 
 
@@ -20,7 +20,6 @@ def main(experiment: Experiment, num_threads: int = 2):
 
     # TODO: implement device.
     """
-    exp_dir = experiment_dir(experiment)
     torch.manual_seed(experiment.seed)
     torch.set_num_threads(num_threads)
 
@@ -38,7 +37,7 @@ def main(experiment: Experiment, num_threads: int = 2):
 
     # Plot Parameters
     eval_config = experiment.configs.get('evaluation', {})
-    plot_list = eval_config.get('plots', [])
+    plot_list = eval_config.get('plots', ['prediction'])
 
     # Initialize dataset, model, and optimizer.
     dataset = get_dataset(experiment.dataset)
@@ -54,8 +53,11 @@ def main(experiment: Experiment, num_threads: int = 2):
 
     if 'training_loss' in plot_list:
         fig = plot_loss(losses, ylabel=model.loss_key.upper())
+        fig.gca().set_title('{} {} Training Loss'.format(
+            experiment.model, experiment.dataset))
         fig.show()
-        fig.savefig('{}training_loss_{}.png'.format(exp_dir, experiment.seed))
+        fig.savefig('{}training_loss_{}.png'.format(experiment.fig_dir, experiment.seed)
+                    )
 
     # Evaluate with different sequence lengths.
     test_set = dataset(train=False, **dataset_config)

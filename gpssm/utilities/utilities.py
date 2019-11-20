@@ -19,35 +19,46 @@ from collections import namedtuple
 
 
 __author__ = 'Sebastian Curi'
-__all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load',
-           'experiment_dir']
-
-Experiment = namedtuple('Experiment', ['model', 'dataset', 'seed', 'configs'])
-Experiment.__new__.__defaults__ = ('PRSSM', 'Actuator', 0, {})  # type: ignore
+__all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load']
 
 
-def experiment_dir(experiment: Experiment) -> str:
-    """Get the experiment directory.
+class Experiment(namedtuple('Experiment', ['model', 'dataset', 'seed', 'configs',
+                                           'log_dir', 'fig_dir'])):
+    """Experiment Named Tuple."""
+
+    def __new__(cls, model: str, dataset: str, seed: int, configs: dict = None):
+        """Create new named experiment."""
+        log_dir = get_dir(model, dataset, fig_dir=False)
+        fig_dir = get_dir(model, dataset, fig_dir=True)
+        return super(Experiment, cls).__new__(
+            cls, model, dataset, seed, configs, log_dir, fig_dir)
+
+
+def get_dir(model: str, dataset: str, fig_dir: bool = False) -> str:
+    """Get the log or figure directory.
 
     If the directory does not exist, create it.
 
     Parameters
     ----------
-    experiment: Experiment.
-        Experiment identifier.
+    model: str.
+        Name of model.
+    dataset: str.
+        Name of dataset.
+    fig_dir: bool, optional.
+        Flag that indicates if the directory is
 
     Returns
     -------
     dir: string
 
     """
-    if 'SCRATCH' not in os.environ:
+    if 'SCRATCH' not in os.environ or fig_dir:
         base_dir = os.getcwd()
     else:
         base_dir = os.environ['SCRATCH']
 
-    log_directory = base_dir + '/experiments/{}/{}/'.format(
-        experiment.dataset, experiment.model)
+    log_directory = base_dir + '/experiments/{}/{}/'.format(dataset, model)
 
     try:
         os.makedirs(log_directory)
@@ -128,9 +139,8 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
 
     """
     plot_list = [] if plot_list is None else plot_list
-    exp_dir = experiment_dir(experiment)
     evaluator = Evaluator()
-    dataset = dataloader.dataset  # type: Dataset
+    dataset = dataloader.dataset  # type: Dataset  # type: ignore
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
         # model.eval()
         for inputs, outputs, states in dataloader:
@@ -149,7 +159,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
                     experiment.model, experiment.dataset))
                 fig.show()
                 fig.savefig('{}prediction_{}_{}.png'.format(
-                    exp_dir, dataset.sequence_length, experiment.seed))
+                    experiment.fig_dir, dataset.sequence_length, experiment.seed))
 
             if '2d' in plot_list:
                 plot_list.remove('2d')
@@ -158,7 +168,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
                     experiment.model, experiment.dataset))
                 fig.show()
                 fig.savefig('{}prediction2d_{}_{}.png'.format(
-                    exp_dir, dataset.sequence_length, experiment.seed))
+                    experiment.fig_dir, dataset.sequence_length, experiment.seed))
 
             if 'transition' in plot_list:  # only implemented for 1d.
                 plot_list.remove('transition')
@@ -172,7 +182,8 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
                     x.numpy(), true_next_x, pred_next_x.loc.numpy(),
                     torch.diag(pred_next_x.covariance_matrix).sqrt().numpy())
                 fig.show()
-                fig.savefig('{}transition_{}.png'.format(exp_dir, experiment.seed))
+                fig.savefig('{}transition_{}.png'.format(
+                    experiment.fig_dir, experiment.seed))
 
         print('Sequence Length: {}. Log-Lik: {}. RMSE: {}'.format(
             dataset.sequence_length,
@@ -191,7 +202,7 @@ def save(experiment: Experiment, **kwargs) -> None:
         Experiment data to save.
 
     """
-    save_dir = experiment_dir(experiment)
+    save_dir = experiment.log_dir
     file_name = save_dir + 'experiment_{}.obj'.format(experiment.seed)
     with open(file_name, 'wb') as file:
         pickle.dump(experiment, file)
@@ -223,13 +234,12 @@ def load(experiment: Experiment) -> Tuple[Experiment, GPSSM]:
         Initialized model.
 
     """
-    save_dir = experiment_dir(experiment)
+    save_dir = experiment.log_dir
     file_name = save_dir + 'experiment_{}.obj'.format(experiment.seed)
     with open(file_name, 'rb') as file:
         experiment = pickle.load(file)
 
     dataset = get_dataset(experiment.dataset)
-
     model = get_model(experiment.model, dataset.dim_outputs, dataset.dim_inputs,
                       **experiment.configs['model'])
     file_name = save_dir + 'model_{}.pt'.format(experiment.seed)

@@ -1,6 +1,7 @@
 data/
 *.obj
 *.pt
+*.png
 
 # IntelliJ
 .idea
