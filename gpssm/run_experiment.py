@@ -31,9 +31,9 @@ if __name__ == "__main__":
     datasets = configs.get('dataset').pop('name')
 
     cmd_list = []
-    for model, dataset, seed in product(models, datasets, args.seeds):
-        cmd = base_cmd + ' --model {} --dataset {} --config-file {} --seed {}'.format(
-            model, dataset, args.config_file, seed)
+    for dataset, model, seed in product(datasets, models, args.seeds):
+        cmd = base_cmd + ' --dataset {} --model {} --config-file {} --seed {}'.format(
+            dataset, model, args.config_file, seed)
         cmd += ' --num-threads {}'.format(args.num_threads)
         cmd_list.append(cmd)
 
