@@ -8,7 +8,7 @@ import yaml
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run GP-SSM from config file.')
-    parser.add_argument('config_file', type=str, default='experiments/small_scale.yaml',
+    parser.add_argument('config_file', type=str, default='experiments/config.yaml',
                         help='config file with hyper-parameters.')
     parser.add_argument('--num-threads', type=int, default=2,
                         help='number of threads to use.')

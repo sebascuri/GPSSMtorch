@@ -14,7 +14,7 @@ from typing import List
 from gpssm.dataset import get_dataset, Dataset
 from gpssm.models import get_model
 from gpssm.models.gpssm_vi import GPSSM
-from gpssm.plotters.plot_sequences import plot_pred, plot_2d, plot_transition
+from gpssm.plotters import plot_pred, plot_2d, plot_transition, plot_loss
 from collections import namedtuple
 
 __author__ = 'Sebastian Curi'
@@ -24,10 +24,16 @@ __all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save',
 class Evaluator(dict):
     """Object that evaluates the predictive performance of a model."""
 
-    def __init__(self, sequence_length):
-        self.sequence_length = sequence_length
+    def __init__(self):
         self.criteria = ['loglik', 'rmse']
         super().__init__({criterion: [] for criterion in self.criteria})
+
+    def dump(self, file_name):
+        """Dump evaluations to a file."""
+        with open(file_name, 'w') as file:
+            file.write('Log-Lik: {}. RMSE: {}'.format(
+                np.array(self['loglik']).mean(), np.array(self['rmse']).mean()
+            ))
 
     def evaluate(self, predictions: Normal, true_values: Tensor) -> None:
         """Return the RMS error between the true values and the mean predictions.
@@ -94,13 +100,14 @@ class Experiment(_experiment):
 
     def __new__(cls, model: str, dataset: str, seed: int, configs: dict = None):
         """Create new named experiment."""
-        log_dir = get_dir(model, dataset, fig_dir=False)
-        fig_dir = get_dir(model, dataset, fig_dir=True)
+        configs = {} if configs is None else configs
+        log_dir = get_dir(model, dataset, configs.get('name', ''), fig_dir=False)
+        fig_dir = get_dir(model, dataset, configs.get('name', ''), fig_dir=True)
         return super(Experiment, cls).__new__(cls, model, dataset, seed, configs,
                                               log_dir, fig_dir)
 
 
-def get_dir(model: str, dataset: str, fig_dir: bool = False) -> str:
+def get_dir(model: str, dataset: str, exp_name: str, fig_dir: bool = False) -> str:
     """Get the log or figure directory.
 
     If the directory does not exist, create it.
@@ -111,6 +118,8 @@ def get_dir(model: str, dataset: str, fig_dir: bool = False) -> str:
         Name of model.
     dataset: str.
         Name of dataset.
+    exp_name:
+        Name of experiment.
     fig_dir: bool, optional.
         Flag that indicates if the directory is
 
@@ -124,7 +133,7 @@ def get_dir(model: str, dataset: str, fig_dir: bool = False) -> str:
     else:
         base_dir = os.environ['SCRATCH']
 
-    log_directory = base_dir + '/experiments/{}/{}/'.format(dataset, model)
+    log_directory = base_dir + '/experiments/{}/{}/{}/'.format(exp_name, dataset, model)
 
     try:
         os.makedirs(log_directory)
@@ -144,12 +153,12 @@ def approximate_with_normal(predicted_outputs: List[MultivariateNormal]) -> Norm
         # Collapse particles!
         output_loc[:, t] = y_pred.loc.mean(dim=-1).t()
         output_cov[:, t] = y_pred.scale.mean(dim=-1).t()
-
+        output_cov[:, t] += (y_pred.loc.permute(2, 1, 0) - output_loc[:, t]).var(dim=0)
     return Normal(output_loc, output_cov)
 
 
-def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: int
-          ) -> List[float]:
+def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: int,
+          experiment: Experiment) -> List[float]:
     """Train a model.
 
     Parameters
@@ -162,6 +171,8 @@ def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs
         Model Optimizer.
     num_epochs: int.
         Number of epochs.
+    experiment: Experiment.
+        Experiment meta-data.
 
     Returns
     -------
@@ -185,11 +196,18 @@ def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs
             losses.append(loss.item())
 
         print(model)
+
+    fig = plot_loss(losses, ylabel=model.loss_key.upper())
+    fig.gca().set_title('{} {} Training Loss'.format(
+        experiment.model, experiment.dataset))
+    fig.show()
+    fig.savefig('{}training_loss.png'.format(experiment.fig_dir))
+
     return losses
 
 
 def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
-             plot_list: list = None) -> Evaluator:
+             plot_list: list = None, key: str = '') -> Evaluator:
     """Evaluate a model.
 
     Parameters
@@ -201,15 +219,17 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
     experiment: Experiment.
         Experiment meta-data.
     plot_list: list of str.
-        list of plotters.
+        List of plotters.
+    key: str.
+        Key to end files with.
 
     """
     plot_list = [] if plot_list is None else plot_list
     dataset = dataloader.dataset  # type: Dataset  # type: ignore
-    evaluator = Evaluator(dataset.sequence_length)
+    evaluator = Evaluator()
 
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
-        # model.eval()
+        model.eval()
         for inputs, outputs, states in dataloader:
             predicted_outputs = model(outputs, inputs)
             predicted_outputs = approximate_with_normal(predicted_outputs)
@@ -222,20 +242,18 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
             if 'prediction' in plot_list:
                 plot_list.remove('prediction')
                 fig = plot_pred(mean[0].T, np.sqrt(scale[0]).T, outputs[0].numpy().T)
-                fig.gca().set_title('{} {} Prediction'.format(
-                    experiment.model, experiment.dataset))
+                fig.gca().set_title('{} {} {} Prediction'.format(
+                    experiment.model, experiment.dataset, key.capitalize()))
                 fig.show()
-                fig.savefig('{}prediction_{}_{}.png'.format(
-                    experiment.fig_dir, dataset.sequence_length, experiment.seed))
+                fig.savefig('{}prediction_{}.png'.format(experiment.fig_dir, key))
 
             if '2d' in plot_list:
                 plot_list.remove('2d')
                 fig = plot_2d(mean[0].T, np.sqrt(scale[0]).T, outputs[0].numpy().T)
-                fig.gca().set_title('{} {} Prediction'.format(
-                    experiment.model, experiment.dataset))
+                fig.gca().set_title('{} {} {} Prediction'.format(
+                    experiment.model, experiment.dataset, key.capitalize()))
                 fig.show()
-                fig.savefig('{}prediction2d_{}_{}.png'.format(
-                    experiment.fig_dir, dataset.sequence_length, experiment.seed))
+                fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key.cap))
 
             if 'transition' in plot_list:  # only implemented for 1d.
                 plot_list.remove('transition')
@@ -249,8 +267,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
                     x.numpy(), true_next_x, pred_next_x.loc.numpy(),
                     torch.diag(pred_next_x.covariance_matrix).sqrt().numpy())
                 fig.show()
-                fig.savefig('{}transition_{}.png'.format(
-                    experiment.fig_dir, experiment.seed))
+                fig.savefig('{}transition.png'.format(experiment.fig_dir))
 
         print('Sequence Length: {}. Log-Lik: {}. RMSE: {}'.format(
             dataset.sequence_length,

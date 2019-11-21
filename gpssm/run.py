@@ -4,8 +4,8 @@ import torch
 from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
-from gpssm.utilities.utilities import train, evaluate, Experiment, save
-from gpssm.plotters.plot_learning import plot_loss
+from gpssm.utilities import train, evaluate, Experiment, save
+from gpssm.plotters import plot_loss
 
 
 def main(experiment: Experiment, num_threads: int = 2):
@@ -37,37 +37,36 @@ def main(experiment: Experiment, num_threads: int = 2):
 
     # Plot Parameters
     eval_config = experiment.configs.get('evaluation', {})
-    plot_list = eval_config.get('plots', ['prediction'])
+    plot_list = eval_config.get('plots', ['prediction', 'training_loss'])
 
     # Initialize dataset, model, and optimizer.
     dataset = get_dataset(experiment.dataset)
     model = get_model(experiment.model, dataset.dim_outputs, dataset.dim_inputs,
                       **model_config)
+    model.dump(experiment.fig_dir + 'model_initial.txt')
     optimizer = torch.optim.Adam(model.properties(), lr=learning_rate)
 
     # Train
     train_set = dataset(train=True, **dataset_config)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    losses = train(model, train_loader, optimizer, num_epochs)
+    train(model, train_loader, optimizer, num_epochs, experiment)
+    model.dump(experiment.fig_dir + 'model_final.txt')
     save(experiment, model=model)
 
-    if 'training_loss' in plot_list:
-        fig = plot_loss(losses, ylabel=model.loss_key.upper())
-        fig.gca().set_title('{} {} Training Loss'.format(
-            experiment.model, experiment.dataset))
-        fig.show()
-        fig.savefig('{}training_loss_{}.png'.format(experiment.fig_dir, experiment.seed)
-                    )
+    # Evaluate on Train Set.
+    train_set.sequence_length = train_set.experiment_length
+    train_loader = DataLoader(train_set, batch_size=1, shuffle=False)
+    evaluator = evaluate(model, train_loader, experiment, plot_list.copy(), 'train')
+    save(experiment, eval_train=evaluator)
+    evaluator.dump(experiment.fig_dir + 'train_results.txt')
 
-    # Evaluate with different sequence lengths.
+    # Evaluate on Test Set.
     test_set = dataset(train=False, **dataset_config)
-    eval_lengths = [train_set.sequence_length, test_set.experiment_length]
-    eval_lengths += eval_config.get('length', [])
-    for eval_length in eval_lengths:
-        test_set.sequence_length = eval_length
-        test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
-        evaluator = evaluate(model, test_loader, experiment, plot_list.copy())
-        save(experiment, **{'eval_{}'.format(test_set.sequence_length): evaluator})
+    test_set.sequence_length = test_set.experiment_length
+    test_loader = DataLoader(test_set, batch_size=1, shuffle=False)
+    evaluator = evaluate(model, test_loader, experiment, plot_list.copy(), 'test')
+    save(experiment, eval_test=evaluator)
+    evaluator.dump(experiment.fig_dir + 'test_results.txt')
 
 
 if __name__ == "__main__":
@@ -88,7 +87,8 @@ if __name__ == "__main__":
             configs = yaml.load(file, Loader=yaml.SafeLoader)
         configs.get('model', {}).pop('name', {})
         configs.get('dataset', {}).pop('name', {})
+        configs['name'] = args.config_file.split('/')[1]
     else:
-        configs = {}
+        configs = {'name': '', 'model': {'dim_states': 4}}
 
     main(Experiment(args.model, args.dataset, args.seed, configs), args.num_threads)
