@@ -49,7 +49,7 @@ class Transitions(nn.Module):
         for i in range(len(self.likelihoods)):
             noise_str = str(
                 self.likelihoods[i].noise_covar.noise.detach())  # type: ignore
-            string += "component {} {} ".format(i, noise_str)
+            string += " component {} {}\n".format(i, noise_str)
         return string
 
     def forward(self, *args: MultivariateNormal, **kwargs) -> MultivariateNormal:

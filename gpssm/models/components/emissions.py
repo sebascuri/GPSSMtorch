@@ -58,7 +58,7 @@ class Emissions(nn.Module):
         """Return recognition model parameters as a string."""
         string = ""
         for i in range(self.dim_outputs):
-            string += "component {} {}".format(
+            string += " component {} {}\n".format(
                 i, str(self.likelihoods[i].noise_covar.noise.detach()))  # type: ignore
         return string
 

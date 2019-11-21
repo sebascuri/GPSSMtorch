@@ -4,44 +4,46 @@ dataset:
   sequence_stride: 1
 
 optimization:
-  learning_rate: 0.1
-  batch_size: 16
-  num_epochs: 5
+  learning_rate: 0.05
+  batch_size: 32
+  num_epochs: 20
 
 evaluation:
   plots: ['training_loss', 'prediction']
-  length: [50, 100]  # Here add extra evaluation lengths.
+  length: []  # Here add extra evaluation lengths.
 
 model:
-  name: ['PRSSM', 'CBFSSM']
-  dim_states: 4
+  name: ['PRSSM, CBFSSM']  # PRSSM, CBFSSM
+  dim_states: 1
   num_particles: 50
   loss_key: 'elbo'
 
   recognition:
-    length: 16
-    kind: 'conv'  # output, zero, nn, conv, lstm, bi-lstm.
+    length: 1
+    kind: 'output'  # output, zero, nn, conv, lstm, bi-lstm.
     variance: 0.01
     learnable: True
   emissions:
     variance: 0.1
     learnable: True
+    shared: False
   transitions:
     variance: 0.0002
     learnable: True
-  forward_gps:
     shared: False
+  forward_gps:
+    shared: True
     mean:
-      kind: 'zero'  # zero, constant, linear.
+      kind: 'constant'  # zero, constant, linear.
     kernel:
-      kind: 'matern 3/2'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
+      kind: 'rbf'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
       ard_num_dims:  # if empty will automatically select dim_states + dim_inputs.
       outputscale: 0.25
       lengthscale: 2.0
       learn_outputscale: True
       learn_lengthscale: True
     inducing_points:
-      number_points: 20
+      number_points: 20  # per (GP).
       strategy: 'uniform'
       scale: 2.0
       learnable: True

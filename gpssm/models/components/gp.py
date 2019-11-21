@@ -41,10 +41,9 @@ class GPSSM(ABC):
 
     def __str__(self) -> str:
         """Return GP parameters as a string."""
-        # TODO: also think about other kernels + Mean functions.
         lengthscale = self.covar_module.base_kernel.lengthscale.detach()
         outputscale = self.covar_module.outputscale.detach()
-        return "outputscale: {}, lengthscale: {}".format(outputscale, lengthscale)
+        return "\toutputscale: {}\n \tlengthscale: {}".format(outputscale, lengthscale)
 
 
 class ExactGPModel(GPSSM, ExactGP):
@@ -293,7 +292,7 @@ class ModelList(nn.Module):
         """Return GP parameters as a string."""
         string = ""
         for i in range(self.num_outputs):
-            string += "component {} {}".format(i, str(self.models[i]))
+            string += " component {} \n{} \n".format(i, str(self.models[i]))
         return string
 
     @property
@@ -307,8 +306,15 @@ class ModelList(nn.Module):
         loc = torch.stack([f.loc for f in next_f])
         cov = torch.stack([f.covariance_matrix for f in next_f])
         if not self.training:
-            cov += 1e-6 * torch.eye(cov.shape[-1]).expand(*cov.shape)
+            cov += 1e-4 * torch.eye(cov.shape[-1]).expand(*cov.shape)
         return MultivariateNormal(loc, cov)
+
+    def kl_divergence(self) -> Tensor:
+        """Get the KL-Divergence of the Model List."""
+        kl_u = torch.tensor(0.)
+        for model in self.models:
+            kl_u += model.kl_divergence()
+        return kl_u / self.num_outputs
 
     def sample_gp(self, likelihood: List[Likelihood]) -> 'ModelList':
         """Sample an Exact GP from the variational distribution."""
@@ -316,13 +322,6 @@ class ModelList(nn.Module):
         for iy in range(self.num_outputs):
             m.append(self.models[iy].sample_gp(likelihood[iy]))  # type: ignore
         return ModelList(m)
-
-    def kl_divergence(self) -> Tensor:
-        """Get the KL-Divergence of the Model List."""
-        kl_u = torch.tensor(0.)
-        for model in self.models:
-            kl_u += model.kl_divergence()
-        return kl_u
 
     def get_fantasy_model(self, inputs, targets, **kwargs) -> 'ModelList':
         """Get a New GP with the inputs/targets."""

@@ -2,6 +2,7 @@ data/
 *.obj
 *.pt
 *.png
+experiments/small_scale/
 
 # IntelliJ
 .idea
