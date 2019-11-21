@@ -5,7 +5,6 @@ from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
 from gpssm.utilities import train, evaluate, Experiment, save
-from gpssm.plotters import plot_loss
 
 
 def main(experiment: Experiment, num_threads: int = 2):

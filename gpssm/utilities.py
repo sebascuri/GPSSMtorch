@@ -253,7 +253,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
                 fig.gca().set_title('{} {} {} Prediction'.format(
                     experiment.model, experiment.dataset, key.capitalize()))
                 fig.show()
-                fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key.cap))
+                fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
 
             if 'transition' in plot_list:  # only implemented for 1d.
                 plot_list.remove('transition')
