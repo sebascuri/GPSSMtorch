@@ -134,7 +134,7 @@ class GPSSM(nn.Module, ABC):
         ################################################################################
         # Add KL Divergences #
         ################################################################################
-        kl_u = self.forward_model.kl_divergence()  # type: ignore
+        kl_u = self.forward_model.kl_divergence() / sequence_length  # type: ignore
         kl_x1 = kl_divergence(
             self.posterior_recognition(output_sequence, input_sequence),
             self.prior_recognition(output_sequence, input_sequence)
