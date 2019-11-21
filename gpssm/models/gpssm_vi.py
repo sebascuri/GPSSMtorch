@@ -1,6 +1,7 @@
 """Base Class for System Id using Variational Inference with SSMs."""
 from abc import ABC, abstractmethod
-from torch import Tensor, Size
+from torch import Tensor
+# from torch import Size
 import torch
 import torch.jit
 import torch.nn as nn
@@ -69,12 +70,12 @@ class GPSSM(nn.Module, ABC):
     def __str__(self) -> str:
         """Return string of object with parameters."""
         string = "Model Parameters: \n\n"
-        string += "Forward Model {}\n".format(self.forward_model)
+        string += "Forward Model\n{}\n".format(self.forward_model)
         if self.backward_model is not None:
-            string = "Backward Model {}\n".format(self.backward_model)
-        string += "Emission {}\n".format(self.emissions)
-        string += "Transition {}\n".format(self.transitions)
-        string += "Prior x1 {}\n".format(self.prior_recognition)
+            string = "Backward Model\n{}\n".format(self.backward_model)
+        string += "Emission\n{}\n".format(self.emissions)
+        string += "Transition\n{}\n".format(self.transitions)
+        string += "Prior x1 {}\n\n".format(self.prior_recognition)
         string += "Posterior x1 {}\n".format(self.posterior_recognition)
 
         return string
@@ -88,6 +89,11 @@ class GPSSM(nn.Module, ABC):
             {'params': self.prior_recognition.parameters()},
             {'params': self.posterior_recognition.parameters()}
         ]
+
+    def dump(self, file_name):
+        """Dump current model parameters to a file."""
+        with open(file_name, 'w') as file:
+            file.write(str(self))
 
     @torch.jit.export
     def loss(self, predicted_outputs: List[Normal], output_sequence: Tensor,
@@ -115,7 +121,7 @@ class GPSSM(nn.Module, ABC):
             # Output: Torch (dim_outputs)
             y = output_sequence[:, t].expand(1, batch_size, dim_outputs)
             y = y.permute(2, 1, 0)
-            assert y.shape == torch.Size([dim_outputs, batch_size, 1])
+            # assert y.shape == torch.Size([dim_outputs, batch_size, 1])
 
             y_pred = predicted_outputs[t]
             ############################################################################
@@ -138,7 +144,7 @@ class GPSSM(nn.Module, ABC):
         # Return different keys. #
         ################################################################################
 
-        if self.loss_key.lower() == 'log_likelihood':
+        if self.loss_key.lower() == 'loglik':
             return -log_lik
         elif self.loss_key.lower() == 'elbo':
             elbo = -(log_lik - kl_x1 - kl_u)
@@ -171,7 +177,7 @@ class GPSSM(nn.Module, ABC):
         """
         output_sequence, input_sequence = inputs
         num_particles = self.num_particles
-        dim_states = self.dim_states
+        # dim_states = self.dim_states
         batch_size, sequence_length, dim_inputs = input_sequence.shape
 
         # Initial State: Tensor (batch_size x num_particles x dim_states)
@@ -182,7 +188,7 @@ class GPSSM(nn.Module, ABC):
 
         state = state_d.rsample(sample_shape=torch.Size([num_particles]))
         state = state.permute(1, 0, 2)
-        assert state.shape == Size([batch_size, num_particles, dim_states])
+        # assert state.shape == Size([batch_size, num_particles, dim_states])
 
         ############################################################################
         # SAMPLE GP for cubic sampling #
@@ -216,26 +222,26 @@ class GPSSM(nn.Module, ABC):
             # Input: Torch (batch_size x num_particles x dim_inputs)
             u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
             u = u.permute(1, 0, 2)
-            assert u.shape == Size([batch_size, num_particles, dim_inputs])
+            # assert u.shape == Size([batch_size, num_particles, dim_inputs])
 
             # \hat{X}: Torch (batch_size x num_particles x dim_states + dim_inputs)
             state_input = torch.cat((state, u), dim=-1)
-            assert state_input.shape == Size(
-                [batch_size, num_particles, dim_inputs + dim_states])
+            # assert state_input.shape == Size(
+            #     [batch_size, num_particles, dim_inputs + dim_states])
 
             # next_f: Multivariate Normal (state_dim x batch_size x num_particles)
             next_f = self.forward_model(state_input)
-            assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
-            assert next_f.covariance_matrix.shape == Size(
-                [dim_states, batch_size, num_particles, num_particles])
+            # assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
+            # assert next_f.covariance_matrix.shape == Size(
+            #     [dim_states, batch_size, num_particles, num_particles])
 
             # next_state: Multivariate Normal (state_dim x batch_size x num_particles)
             next_state = self.transitions(next_f)
-            assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
-            assert next_f.covariance_matrix.shape == Size(
-                [dim_states, batch_size, num_particles, num_particles])
-            assert (next_state.loc == next_f.loc).all()
-            assert not (next_state.covariance_matrix == next_f.covariance_matrix).all()
+            # assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
+            # assert next_f.covariance_matrix.shape == Size(
+            #     [dim_states, batch_size, num_particles, num_particles])
+            # assert (next_state.loc == next_f.loc).all()
+            # assert not (next_state.covariance_matrix ==next_f.covariance_matrix).all()
 
             ############################################################################
             # UPDATE GP for cubic sampling #
@@ -257,7 +263,7 @@ class GPSSM(nn.Module, ABC):
             # state: Tensor (batch_size x num_particles x dim_states)
             state_d = next_state
             state = state_d.rsample().permute(1, 2, 0)
-            assert state.shape == Size([batch_size, num_particles, dim_states])
+            # assert state.shape == Size([batch_size, num_particles, dim_states])
 
             ############################################################################
             # PREDICT Outputs #
@@ -266,7 +272,7 @@ class GPSSM(nn.Module, ABC):
             y_pred = self.emissions(state)
             outputs.append(y_pred)
 
-        assert len(outputs) == sequence_length
+        # assert len(outputs) == sequence_length
         return outputs
 
     @torch.jit.export
@@ -281,16 +287,16 @@ class GPSSM(nn.Module, ABC):
         for t in reversed(range(sequence_length)):
             y = output_sequence[:, t]
             y_ = self.emissions(y)
-            assert y_.loc.shape == Size([dim_outputs, batch_size])
-            assert y_.scale.shape == Size([dim_outputs, batch_size])
+            # assert y_.loc.shape == Size([dim_outputs, batch_size])
+            # assert y_.scale.shape == Size([dim_outputs, batch_size])
 
             loc = torch.cat((y_.loc, torch.zeros(dim_delta, batch_size)))
             loc = loc.expand(num_particles, dim_states, batch_size).permute(1, 2, 0)
-            assert loc.shape == Size([dim_states, batch_size, num_particles])
+            # assert loc.shape == Size([dim_states, batch_size, num_particles])
 
             cov = torch.cat((y_.scale, torch.ones(dim_delta, batch_size)))
             cov = cov.expand(num_particles, dim_states, batch_size).permute(1, 2, 0)
-            assert cov.shape == Size([dim_states, batch_size, num_particles])
+            # assert cov.shape == Size([dim_states, batch_size, num_particles])
 
             # TODO: IMPLEMENT BACKWARDS-PASS
             outputs.append(Normal(loc, cov))
