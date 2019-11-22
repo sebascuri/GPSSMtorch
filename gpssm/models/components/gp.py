@@ -10,7 +10,7 @@ from gpytorch.kernels import Kernel
 from gpytorch.models import AbstractVariationalGP, ExactGP
 from gpytorch.variational import CholeskyVariationalDistribution, \
     VariationalDistribution
-from gpytorch.variational import VariationalStrategy
+from .variational_strategy import VariationalStrategy
 
 __author__ = 'Sebastian Curi'
 __all__ = ['GPSSM', 'ExactGPModel', 'VariationalGP']
@@ -212,19 +212,10 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
     def __call__(self, state_input: Tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
         batch_size, dim_inputs, num_particles = state_input.shape
-        if batch_size == 1:
-            state_input = state_input[0].expand(
-                self.num_outputs, dim_inputs, num_particles).permute(0, 2, 1)
-        else:
-            state_input = state_input.expand(
-                self.num_outputs, batch_size, dim_inputs, num_particles
-            ).permute(1, 0, 3, 2)
+        state_input = state_input.expand(self.num_outputs, batch_size, dim_inputs,
+                                         num_particles).permute(1, 0, 3, 2)
 
-        f = AbstractVariationalGP.__call__(self, state_input, **kwargs)
-        if batch_size == 1:
-            f.loc = f.loc.unsqueeze(0)
-            f.covariance_matrix = f.covariance_matrix.unsqueeze(0)
-        return f
+        return AbstractVariationalGP.__call__(self, state_input, **kwargs)
 
     def forward(self, state_input: Tensor) -> MultivariateNormal:
         """Forward call of GP class."""

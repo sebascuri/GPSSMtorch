@@ -32,16 +32,14 @@ model:
   emissions:
     variance: 0.1   # Initial variance estimate.
     learnable: True # Learnable parameters flag.
-    shared: False  # Shared parameters between components flag.
   transitions:
     variance: 0.0002  # Initial variance estimate.
     learnable: True  # Learnable parameters flag.
-    shared: False  # Shared parameters between components flag.
   forward_gps:
-    shared: True  # Shared parameters between components flag.
     mean:
       kind: 'zero'  # Strategies: zero, constant, linear.
     kernel:
+      shared: False  # Shared parameters between components flag.
       kind: 'rbf'  # Strategies: rbf, matern 1/2, matern 3/2, matern 5/2, linear
       ard_num_dims:  # Number of ard dimensions. if empty will automatically select dim_states + dim_inputs.
       outputscale: 0.25  # Initial variance estimate.
