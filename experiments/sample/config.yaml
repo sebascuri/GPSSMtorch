@@ -14,7 +14,7 @@ evaluation:
 
 model:
   name: ['PRSSM']  # PRSSM, CBFSSM
-  dim_states: 1
+  dim_states: 4
   num_particles: 50
   loss_key: 'elbo'
   loss_factors:  # These factors multiply each term of the ELBO.
@@ -36,10 +36,10 @@ model:
     variance: 0.0001
     learnable: True
   forward_gps:
-    shared: False
     mean:
       kind: 'zero'  # zero, constant, linear.
     kernel:
+      shared: True
       kind: 'matern 3/2'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
       ard_num_dims:  # if empty will automatically select dim_states + dim_inputs.
       outputscale: 0.1

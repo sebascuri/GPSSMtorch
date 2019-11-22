@@ -1,7 +1,6 @@
 """Implementation of GP Models."""
 
-import torch
-import torch.nn as nn
+# import torch
 from torch import Tensor
 from abc import ABC, abstractmethod
 from gpytorch.distributions import MultivariateNormal
@@ -12,10 +11,9 @@ from gpytorch.models import AbstractVariationalGP, ExactGP
 from gpytorch.variational import CholeskyVariationalDistribution, \
     VariationalDistribution
 from gpytorch.variational import VariationalStrategy
-from typing import List
 
 __author__ = 'Sebastian Curi'
-__all__ = ['GPSSM', 'ExactGPModel', 'VariationalGP', 'ModelList']
+__all__ = ['GPSSM', 'ExactGPModel', 'VariationalGP']
 
 
 class GPSSM(ABC):
@@ -161,6 +159,7 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
 
     Examples
     --------
+    >>> import torch
     >>> from gpytorch.means import ConstantMean
     >>> from gpytorch.kernels import ScaleKernel, RBFKernel
     >>> from gpytorch.likelihoods import GaussianLikelihood
@@ -202,20 +201,35 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
                  variational_distribution: VariationalDistribution = None) -> None:
 
         if variational_distribution is None:
-            num_inducing, input_dims = inducing_points.shape
+            batch_k, num_inducing, input_dims = inducing_points.shape
             variational_distribution = CholeskyVariationalDistribution(
                 num_inducing_points=num_inducing,
+                batch_size=batch_k
             )
         variational_strategy = VariationalStrategy(
             self, inducing_points, variational_distribution,
             learn_inducing_locations=learn_inducing_loc
         )
+        self.num_outputs = inducing_points.shape[0]
         AbstractVariationalGP.__init__(self, variational_strategy)
         GPSSM.__init__(self, mean, kernel)
 
     def __call__(self, state_input: Tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
-        return AbstractVariationalGP.__call__(self, state_input, **kwargs)
+        batch_size, dim_inputs, num_particles = state_input.shape
+        if batch_size == 1:
+            state_input = state_input[0].expand(
+                self.num_outputs, dim_inputs, num_particles).permute(0, 2, 1)
+        else:
+            state_input = state_input.expand(
+                self.num_outputs, batch_size, dim_inputs, num_particles
+            ).permute(1, 0, 3, 2)
+
+        f = AbstractVariationalGP.__call__(self, state_input, **kwargs)
+        if batch_size == 1:
+            f.loc = f.loc.unsqueeze(0)
+            f.covariance_matrix = f.covariance_matrix.unsqueeze(0)
+        return f
 
     def forward(self, state_input: Tensor) -> MultivariateNormal:
         """Forward call of GP class."""
@@ -235,98 +249,3 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
     def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model."""
         return self.variational_strategy.kl_divergence().mean()
-
-
-class ModelList(nn.Module):
-    """List of variational models.
-
-    Properties
-    ----------
-    models: list of GPSSMs.
-
-    Examples
-    --------
-    >>> from gpytorch.means import ConstantMean
-    >>> from gpytorch.kernels import ScaleKernel, RBFKernel
-    >>> from gpytorch.likelihoods import GaussianLikelihood
-    >>> from gpytorch.mlls import VariationalELBO, ExactMarginalLogLikelihood
-    >>> from torch.testing import assert_allclose
-    >>> from torch import Size
-    >>> data_size = 64
-    >>> dim_x = 2
-    >>> x = torch.randn((dim_x, data_size))
-    >>> num_inducing_points = 25
-    >>> learn_inducing_loc = True
-    >>> y1 = torch.sin(x[0]) + 2 * x[1] - x[1] ** 2 + torch.randn(data_size)
-    >>> y2 = torch.cos(x[0]) - 2 * x[1] + x[1] ** 2 + torch.randn(data_size)
-    >>> y = [y1, y2]
-    >>> dim_y = len(y)
-    >>> ip = torch.randn((num_inducing_points, dim_x))
-    >>> mean = ConstantMean()
-    >>> kernel = ScaleKernel(RBFKernel())
-    >>> model = ModelList([VariationalGP(ip, mean, kernel, True) for _ in range(dim_y)])
-    >>> likelihoods = [GaussianLikelihood() for _ in range(dim_y)]
-    >>> debug_str = str(model)
-    >>> assert model.num_outputs == dim_y
-    >>> f = model(x)
-    >>> assert type(f) is MultivariateNormal
-    >>> assert f.loc.shape == Size([dim_x, data_size])
-    >>> assert f.covariance_matrix.shape == Size([dim_x, data_size, data_size])
-    >>> x = torch.randn((8, dim_x, 4))
-    >>> f = model(x)
-    >>> assert type(f) is MultivariateNormal
-    >>> assert f.loc.shape == Size([8, dim_x, 4])
-    >>> assert f.covariance_matrix.shape == Size([8, dim_x, 4, 4])
-    >>> sampled_model = model.sample_gp(likelihoods)
-    >>> assert sampled_model.num_outputs == dim_y
-    >>> assert type(sampled_model.models[0]) == ExactGPModel
-    """
-
-    def __init__(self, models: List[VariationalGP]) -> None:
-        super().__init__()
-        self.models = models
-        for idx, model in enumerate(models):
-            self.add_module('gp_{}'.format(idx), model)
-
-    def __str__(self) -> str:
-        """Return GP parameters as a string."""
-        string = ""
-        for i in range(self.num_outputs):
-            string += " component {} \n{} \n".format(i, str(self.models[i]))
-        return string
-
-    @property
-    def num_outputs(self) -> int:
-        """Get the number of outputs."""
-        return len(self.models)
-
-    def forward(self, *args: Tensor, **kwargs):
-        """Forward propagate all models."""
-        state_input = args[0].transpose(-1, -2)
-        next_f = [model(state_input, *args[1:], **kwargs) for model in self.models]
-        dim = 1 if state_input.ndimension() > 2 else 0
-        loc = torch.stack([f.loc for f in next_f], dim=dim)
-        cov = torch.stack([f.covariance_matrix for f in next_f], dim=dim)
-        if not self.training:
-            cov += 1e-4 * torch.eye(cov.shape[-1]).expand(*cov.shape)
-        return MultivariateNormal(loc, cov)
-
-    def kl_divergence(self) -> Tensor:
-        """Get the KL-Divergence of the Model List."""
-        kl_u = torch.tensor(0.)
-        for model in self.models:
-            kl_u += model.kl_divergence()
-        return kl_u / self.num_outputs
-
-    def sample_gp(self, likelihood: List[Likelihood]) -> 'ModelList':
-        """Sample an Exact GP from the variational distribution."""
-        m = []
-        for iy in range(self.num_outputs):
-            m.append(self.models[iy].sample_gp(likelihood[iy]))  # type: ignore
-        return ModelList(m)
-
-    def get_fantasy_model(self, inputs, targets, **kwargs) -> 'ModelList':
-        """Get a New GP with the inputs/targets."""
-        models = [model.get_fantasy_model(inputs, target_.rsample(), **kwargs)
-                  for (model, target_) in zip(self.models, targets)]  # type: ignore
-        return ModelList(models)

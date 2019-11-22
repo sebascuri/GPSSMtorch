@@ -48,6 +48,8 @@ class Emissions(nn.Module):
             Output of dimension batch_size x dim_output x num_particles.
         """
         state = args[0]
+        batch_size, _, num_particles = state.shape
         loc = state[:, :self.dim_outputs]
-        cov = (self.sd_noise ** 2).expand(loc.shape)
+        cov = (self.sd_noise ** 2).expand(batch_size, num_particles,
+                                          self.dim_outputs).transpose(1, 2)
         return Normal(loc, cov)

@@ -145,15 +145,14 @@ def get_dir(model: str, dataset: str, exp_name: str, fig_dir: bool = False) -> s
 def approximate_with_normal(predicted_outputs: List[MultivariateNormal]) -> Normal:
     """Approximate a particle distribution with a Normal by moment matching."""
     sequence_length = len(predicted_outputs)
-    dim_outputs, batch_size, _ = predicted_outputs[0].loc.shape
+    batch_size, dim_outputs, _ = predicted_outputs[0].loc.shape
 
     output_loc = torch.zeros((batch_size, sequence_length, dim_outputs))
     output_cov = torch.zeros((batch_size, sequence_length, dim_outputs))
     for t, y_pred in enumerate(predicted_outputs):
         # Collapse particles!
-        output_loc[:, t] = y_pred.loc.mean(dim=-1).t()
-        output_cov[:, t] = y_pred.scale.mean(dim=-1).t()
-        output_cov[:, t] += (y_pred.loc.permute(2, 1, 0) - output_loc[:, t]).var(dim=0)
+        output_loc[:, t, :] = y_pred.loc.mean(dim=-1)
+        output_cov[:, t, :] = y_pred.scale.mean(dim=-1) + y_pred.loc.var(dim=-1)
     return Normal(output_loc, output_cov)
 
 
@@ -242,7 +241,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
             if 'prediction' in plot_list:
                 plot_list.remove('prediction')
                 fig = plot_pred(mean[0].T, np.sqrt(scale[0]).T, outputs[0].numpy().T)
-                fig.gca().set_title('{} {} {} Prediction'.format(
+                fig.axes[0].set_title('{} {} {} Prediction'.format(
                     experiment.model, experiment.dataset, key.capitalize()))
                 fig.show()
                 fig.savefig('{}prediction_{}.png'.format(experiment.fig_dir, key))
@@ -250,7 +249,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
             if '2d' in plot_list:
                 plot_list.remove('2d')
                 fig = plot_2d(mean[0].T, np.sqrt(scale[0]).T, outputs[0].numpy().T)
-                fig.gca().set_title('{} {} {} Prediction'.format(
+                fig.axes[0].set_title('{} {} {} Prediction'.format(
                     experiment.model, experiment.dataset, key.capitalize()))
                 fig.show()
                 fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
@@ -258,7 +257,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
             if 'transition' in plot_list:  # only implemented for 1d.
                 plot_list.remove('transition')
                 gp = model.forward_model.models[0]
-                transition = model.transitions.likelihoods[0]
+                transition = model.transitions
                 x = torch.arange(-3, 1, 0.1)
                 true_next_x = dataset.f(x.numpy())
                 pred_next_x = transition(gp(x))

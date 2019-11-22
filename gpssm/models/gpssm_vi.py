@@ -9,7 +9,7 @@ from torch.distributions import kl_divergence, Normal
 from typing import List
 from gpytorch.distributions import MultivariateNormal
 
-from .components.gp import ModelList
+from .components.gp import VariationalGP
 from .components.emissions import Emissions
 from .components.transitions import Transitions
 from .components.recognition_model import Recognition
@@ -46,12 +46,12 @@ class GPSSM(nn.Module, ABC):
     """
 
     def __init__(self,
-                 forward_model: ModelList,
+                 forward_model: VariationalGP,
                  transitions: Transitions,
                  emissions: Emissions,
                  recognition_model: Recognition,
                  num_particles: int = 20,
-                 backward_model: ModelList = None,
+                 backward_model: VariationalGP = None,
                  cubic_sampling: bool = False,
                  loss_key: str = 'elbo',
                  loss_factors: dict = None) -> None:
@@ -238,7 +238,9 @@ class GPSSM(nn.Module, ABC):
             #     [batch_size, dim_inputs + dim_states, num_particles])
 
             # next_f: Multivariate Normal (batch_size x state_dim x num_particles)
+            # next_f = self.forward_model(state_input)
             next_f = self.forward_model(state_input)
+
             # assert next_f.loc.shape == Size([batch_size, dim_states, num_particles])
             # assert next_f.covariance_matrix.shape == Size(
             #     [batch_size, dim_states, num_particles, num_particles])
@@ -293,18 +295,18 @@ class GPSSM(nn.Module, ABC):
 
         outputs = []
         for t in reversed(range(sequence_length)):
-            y = output_sequence[:, t]
+            y = output_sequence[:, t].expand(num_particles, -1, -1).permute(1, 2, 0)
             y_ = self.emissions(y)
-            # assert y_.loc.shape == Size([batch_size, dim_outputs])
-            # assert y_.scale.shape == Size([batch_size, dim_outputs])
+            # assert y_.loc.shape == Size([batch_size, dim_outputs, num_particles])
+            # assert y_.scale.shape == Size([batch_size, dim_outputs, num_particles])
 
-            loc = torch.cat((y_.loc, torch.zeros(batch_size, dim_delta)), dim=1)
-            loc = loc.expand(num_particles, batch_size, dim_states).permute(1, 2, 0)
-            # assert loc.shape == Size([batch_size, dim_states, num_particles])
+            loc = torch.cat((y_.loc,
+                             torch.zeros(batch_size, dim_delta, num_particles)), dim=1)
+            # assert loc.shape == torch.Size([batch_size, dim_states, num_particles])
 
-            cov = torch.cat((y_.scale, torch.ones(batch_size, dim_delta)), dim=1)
-            cov = cov.expand(num_particles, batch_size, dim_states).permute(1, 2, 0)
-            # assert cov.shape == Size([batch_size, dim_states, num_particles])
+            cov = torch.cat((y_.scale,
+                             torch.ones(batch_size, dim_delta, num_particles)), dim=1)
+            # assert cov.shape == torch.Size([batch_size, dim_states, num_particles])
 
             # TODO: IMPLEMENT BACKWARDS-PASS
             outputs.append(Normal(loc, cov))
