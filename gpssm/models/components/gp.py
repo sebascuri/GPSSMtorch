@@ -167,17 +167,17 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
     >>> from torch.testing import assert_allclose
     >>> data_size = 64
     >>> dim_x = 2
-    >>> x = torch.randn((data_size, dim_x))
+    >>> x = torch.randn((dim_x, data_size))
     >>> num_inducing_points = 25
     >>> learn_inducing_loc = True
-    >>> y = torch.sin(x[:, 0]) + 2 * x[:, 1] - x[:, 1] ** 2 + torch.randn(data_size)
-    >>> inducing_points = torch.randn((num_inducing_points, dim_x))
+    >>> y = torch.sin(x[0]) + 2 * x[1] - x[1] ** 2 + torch.randn(data_size)
+    >>> inducing_points = torch.randn((1, num_inducing_points, dim_x))
     >>> likelihoods = GaussianLikelihood()
     >>> mean = ConstantMean()
     >>> kernel = ScaleKernel(RBFKernel())
     >>> model = VariationalGP(inducing_points, mean, kernel, learn_inducing_loc)
     >>> mll = VariationalELBO(likelihoods, model, data_size, combine_terms=False)
-    >>> pred_f = model(x)
+    >>> pred_f = model(x.unsqueeze(0))
     >>> log_lik, kl_div, log_prior = mll(pred_f, y)
     >>> loss = -(log_lik - kl_div + log_prior).sum()
     >>> pred_y = likelihoods(pred_f)
@@ -186,12 +186,7 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
     >>> model_i = model.sample_gp(likelihoods)
     >>> m = model_i.eval()
     >>> mll = ExactMarginalLogLikelihood(likelihoods, model)
-    >>> pred_f = model(x)
-    >>> loss = -mll(pred_f, y)
-    >>> torch.testing.assert_allclose(loss, -likelihoods(pred_f).log_prob(y)/data_size)
-    >>> batch = model(torch.randn(8, 4, dim_x))
-    >>> assert_allclose(batch.loc.shape, torch.Size([8, 4]))
-    >>> assert_allclose(batch.covariance_matrix.shape, torch.Size([8, 4, 4]))
+    >>> pred_f = model(x.unsqueeze(0))
     """
 
     def __init__(self, inducing_points: Tensor,
