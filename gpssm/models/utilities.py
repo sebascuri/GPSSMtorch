@@ -2,7 +2,7 @@
 
 import torch
 import numpy as np
-from gpssm.models.components.emissions import Emissions
+from gpssm.models.components.emissions import Emissions, EmissionsNN
 from gpssm.models.components.transitions import Transitions
 from gpssm.models.components.gp import VariationalGP, ModelList
 from gpssm.models.components.recognition_model import Recognition, OutputRecognition, \
@@ -94,8 +94,9 @@ def init_emissions(dim_outputs: int, variance: float = None, learnable: bool = T
     emission: Emissions.
         Initialized emission module.
     """
-    return Emissions(likelihoods=_init_likelihood_list(dim_outputs, variance,
-                                                       learnable, shared))
+    return EmissionsNN(dim_outputs, variance, learnable)
+    # return Emissions(likelihoods=_init_likelihood_list(dim_outputs, variance,
+    #                                                    learnable, shared))
 
 
 def init_transmissions(dim_states: int, variance: float = 0.01, learnable: bool = True,
