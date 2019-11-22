@@ -38,9 +38,10 @@ class GPSSM(nn.Module, ABC):
     cubic_sampling: bool.
         Cubic Sampling strategy
     loss_key: str.
-        Key to identify training.
+        Key to select loss to return, default ELBO.
+    loss_factors: dict.
+        Factors to multiply each term of the ELBO with.
 
-    # TODO: Implement loss factors.
     # TODO: Implement cubic sampling.
     """
 
@@ -52,7 +53,8 @@ class GPSSM(nn.Module, ABC):
                  num_particles: int = 20,
                  backward_model: ModelList = None,
                  cubic_sampling: bool = False,
-                 loss_key: str = 'elbo') -> None:
+                 loss_key: str = 'elbo',
+                 loss_factors: dict = None) -> None:
         super().__init__()
         self.dim_states = forward_model.num_outputs
         self.forward_model = forward_model
@@ -66,6 +68,9 @@ class GPSSM(nn.Module, ABC):
         self.num_particles = num_particles
         self.cubic_sampling = cubic_sampling
         self.loss_key = loss_key
+        if loss_factors is None:
+            loss_factors = dict(loglik=1., kl_uf=1., kl_ub=1., kl_x=1., entropy=1.)
+        self.loss_factors = loss_factors
 
     def __str__(self) -> str:
         """Return string of object with parameters."""
@@ -134,7 +139,7 @@ class GPSSM(nn.Module, ABC):
         ################################################################################
         # Add KL Divergences #
         ################################################################################
-        kl_u = self.forward_model.kl_divergence() / sequence_length  # type: ignore
+        kl_uf = self.forward_model.kl_divergence() / sequence_length  # type: ignore
         kl_x1 = kl_divergence(
             self.posterior_recognition(output_sequence, input_sequence),
             self.prior_recognition(output_sequence, input_sequence)
@@ -147,7 +152,10 @@ class GPSSM(nn.Module, ABC):
         if self.loss_key.lower() == 'loglik':
             return -log_lik
         elif self.loss_key.lower() == 'elbo':
-            elbo = -(log_lik - kl_x1 - kl_u)
+            # TODO: add backwards pass losses.
+            elbo = -(self.loss_factors['loglik'] * log_lik
+                     - self.loss_factors['kl_x'] * kl_x1
+                     - self.loss_factors['kl_uf'] * kl_uf)
             return elbo
         elif self.loss_key.lower() == 'l2':
             return l2
