@@ -1,0 +1,52 @@
+dataset:
+  name: [Sarcos]
+  sequence_length: 250
+  sequence_stride: 10
+
+optimization:
+  learning_rate: 0.05
+  batch_size: 16
+  num_epochs: 8
+
+evaluation:
+  plots: ['training_loss', 'prediction']
+  length: []  # Here add extra evaluation lengths.
+
+model:
+  name: ['PRSSM', 'CBFSSM']
+  dim_states: 14
+  num_particles: 20
+  loss_key: 'elbo'
+
+  recognition:
+    length: 16
+    kind: 'output'  # output, zero, nn, conv, lstm, bi-lstm.
+    variance: 0.0001
+    learnable: False
+  emissions:
+    variance: 0.0025
+    learnable: False
+  transitions:
+    variance: 0.0002
+    learnable: False
+  forward_gps:
+    shared: False
+    mean:
+      kind: 'zero'  # zero, constant, linear.
+    kernel:
+      kind: 'matern 3/2'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
+      ard_num_dims:  # if empty will automatically select dim_states + dim_inputs.
+      outputscale: 0.25
+      lengthscale: 2.0
+      learn_outputscale: True
+      learn_lengthscale: True
+    inducing_points:
+      number_points: 20
+      strategy: 'uniform'
+      scale: 2.0
+      learnable: True
+    variational_distribution:
+      learn_mean: True
+      mean: 0.0025
+      learn_var: True
+      var: 0.0002
