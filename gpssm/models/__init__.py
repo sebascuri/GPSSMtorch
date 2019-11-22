@@ -1,5 +1,5 @@
 from .gpssm_vi import GPSSM, PRSSM, CBFSSM
-from .utilities import init_emissions, init_transmissions, init_gps, init_recognition
+from .utilities import init_emissions, init_transitions, init_gps, init_recognition
 
 
 def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = None,
@@ -8,7 +8,7 @@ def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = 
     dim_states = max(dim_states if dim_states is not None else dim_outputs, dim_outputs)
 
     gps = init_gps(dim_inputs, dim_states, **kwargs.pop('forward_gps', {}))  # type: ignore
-    trans = init_transmissions(dim_states, **kwargs.pop('transitions', {}))  # type: ignore
+    trans = init_transitions(dim_states, **kwargs.pop('transitions', {}))  # type: ignore
     emission = init_emissions(dim_outputs, **kwargs.pop('emissions', {}))  # type: ignore
     recognition = init_recognition(dim_outputs, dim_inputs, dim_states,  # type: ignore
                                    **kwargs.pop('recognition', {}))

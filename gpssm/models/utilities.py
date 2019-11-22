@@ -2,19 +2,18 @@
 
 import torch
 import numpy as np
-from gpssm.models.components.emissions import Emissions, EmissionsNN
+from gpssm.models.components.emissions import Emissions
 from gpssm.models.components.transitions import Transitions
 from gpssm.models.components.gp import VariationalGP, ModelList
 from gpssm.models.components.recognition_model import Recognition, OutputRecognition, \
     ZeroRecognition, NNRecognition, ConvRecognition, LSTMRecognition
-from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean
 from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel, LinearKernel, Kernel
 from gpytorch.variational import CholeskyVariationalDistribution
 from typing import Tuple
 
 __author__ = 'Sebastian Curi'
-__all__ = ['init_emissions', 'init_transmissions', 'init_gps', 'init_recognition']
+__all__ = ['init_emissions', 'init_transitions', 'init_gps', 'init_recognition']
 
 
 def init_recognition(dim_outputs: int, dim_inputs: int, dim_states: int,
@@ -75,7 +74,7 @@ def init_recognition(dim_outputs: int, dim_inputs: int, dim_states: int,
 
 
 def init_emissions(dim_outputs: int, variance: float = 1.0, learnable: bool = True,
-                   shared: bool = False) -> Emissions:
+                   ) -> Emissions:
     """Initialize emission model.
 
     Parameters
@@ -86,22 +85,18 @@ def init_emissions(dim_outputs: int, variance: float = 1.0, learnable: bool = Tr
         Initial emission covariance estimate.
     learnable: bool.
         Flag that indicates if module is learnable.
-    shared: bool.
-        Flag that indicates if module parameters are shared between outputs.
 
     Returns
     -------
     emission: Emissions.
         Initialized emission module.
     """
-    return EmissionsNN(dim_outputs, variance, learnable)
-    # return Emissions(likelihoods=_init_likelihood_list(dim_outputs, variance,
-    #                                                    learnable, shared))
+    return Emissions(dim_outputs, variance, learnable)
 
 
-def init_transmissions(dim_states: int, variance: float = 0.01, learnable: bool = True,
-                       shared: bool = False) -> Transitions:
-    """Initialize transmissions model.
+def init_transitions(dim_states: int, variance: float = 0.01, learnable: bool = True
+                     ) -> Transitions:
+    """Initialize transitions model.
 
     Parameters
     ----------
@@ -111,17 +106,14 @@ def init_transmissions(dim_states: int, variance: float = 0.01, learnable: bool 
         Initial emission covariance estimate.
     learnable: bool.
         Flag that indicates if module is learnable.
-    shared: bool.
-        Flag that indicates if module parameters are shared between outputs.
 
     Returns
     -------
-    emission: Emissions.
+    transitions: Transitions.
         Initialized emission module.
 
     """
-    return Transitions(likelihoods=_init_likelihood_list(dim_states, variance,
-                                                         learnable, shared))
+    return Transitions(dim_states, variance, learnable)
 
 
 def init_gps(dim_inputs: int, dim_states: int, kernel: dict = None, mean: dict = None,
@@ -172,45 +164,6 @@ def init_gps(dim_inputs: int, dim_states: int, kernel: dict = None, mean: dict =
         gps.append(gp)
 
     return ModelList(gps)
-
-
-def _init_likelihood_list(num_models: int, initial_variance: float = None,
-                          learnable: bool = True, shared: bool = False) -> list:
-    """Initialize a list of likelihoods.
-
-    Parameters
-    ----------
-    num_models: int.
-        Number of likelihoods.
-    initial_variance: float.
-        Initial emission covariance estimate.
-    learnable: bool.
-        Flag that indicates if module is learnable.
-    shared: bool.
-        Flag that indicates if module parameters are shared between outputs.
-
-    Returns
-    -------
-    emission: Emissions.
-        Initialized emission module.
-    """
-    if shared:
-        likelihood = GaussianLikelihood()
-        if initial_variance is not None:
-            likelihood.noise_covar.noise = initial_variance
-        likelihood.raw_noise.requires_grad = learnable
-        likelihoods = [likelihood for _ in range(num_models)]
-
-    else:
-        likelihoods = []
-        for _ in range(num_models):
-            likelihood = GaussianLikelihood()
-            if initial_variance is not None:
-                likelihood.noise_covar.noise = initial_variance
-            likelihood.raw_noise.requires_grad = learnable
-            likelihoods.append(likelihood)
-
-    return likelihoods
 
 
 def _parse_mean(input_size: int, kind: str = 'zero') -> Mean:

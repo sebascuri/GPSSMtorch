@@ -254,11 +254,11 @@ class ModelList(nn.Module):
     >>> from torch import Size
     >>> data_size = 64
     >>> dim_x = 2
-    >>> x = torch.randn((data_size, dim_x))
+    >>> x = torch.randn((dim_x, data_size))
     >>> num_inducing_points = 25
     >>> learn_inducing_loc = True
-    >>> y1 = torch.sin(x[:, 0]) + 2 * x[:, 1] - x[:, 1] ** 2 + torch.randn(data_size)
-    >>> y2 = torch.cos(x[:, 0]) - 2 * x[:, 1] + x[:, 1] ** 2 + torch.randn(data_size)
+    >>> y1 = torch.sin(x[0]) + 2 * x[1] - x[1] ** 2 + torch.randn(data_size)
+    >>> y2 = torch.cos(x[0]) - 2 * x[1] + x[1] ** 2 + torch.randn(data_size)
     >>> y = [y1, y2]
     >>> dim_y = len(y)
     >>> ip = torch.randn((num_inducing_points, dim_x))
@@ -272,11 +272,11 @@ class ModelList(nn.Module):
     >>> assert type(f) is MultivariateNormal
     >>> assert f.loc.shape == Size([dim_x, data_size])
     >>> assert f.covariance_matrix.shape == Size([dim_x, data_size, data_size])
-    >>> x = torch.randn((8, 4, dim_x))
+    >>> x = torch.randn((8, dim_x, 4))
     >>> f = model(x)
     >>> assert type(f) is MultivariateNormal
-    >>> assert f.loc.shape == Size([dim_x, 8, 4])
-    >>> assert f.covariance_matrix.shape == Size([dim_x, 8, 4, 4])
+    >>> assert f.loc.shape == Size([8, dim_x, 4])
+    >>> assert f.covariance_matrix.shape == Size([8, dim_x, 4, 4])
     >>> sampled_model = model.sample_gp(likelihoods)
     >>> assert sampled_model.num_outputs == dim_y
     >>> assert type(sampled_model.models[0]) == ExactGPModel
@@ -300,12 +300,13 @@ class ModelList(nn.Module):
         """Get the number of outputs."""
         return len(self.models)
 
-    def forward(self, *args, **kwargs):
+    def forward(self, *args: Tensor, **kwargs):
         """Forward propagate all models."""
-        state_input = args[0].permute(0, 2, 1)
+        state_input = args[0].transpose(-1, -2)
         next_f = [model(state_input, *args[1:], **kwargs) for model in self.models]
-        loc = torch.stack([f.loc for f in next_f], dim=1)
-        cov = torch.stack([f.covariance_matrix for f in next_f], dim=1)
+        dim = 1 if state_input.ndimension() > 2 else 0
+        loc = torch.stack([f.loc for f in next_f], dim=dim)
+        cov = torch.stack([f.covariance_matrix for f in next_f], dim=dim)
         if not self.training:
             cov += 1e-4 * torch.eye(cov.shape[-1]).expand(*cov.shape)
         return MultivariateNormal(loc, cov)

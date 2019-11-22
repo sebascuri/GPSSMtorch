@@ -1,81 +1,54 @@
 """Emission model for GPSSM's."""
-from gpytorch.likelihoods import Likelihood
+import numpy as np
 import torch
 import torch.nn as nn
-from torch import Tensor
 from gpytorch.distributions import MultivariateNormal
-from typing import List, Union
-State = Union[Tensor, MultivariateNormal]
+
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Transitions']
 
 
 class Transitions(nn.Module):
-    """Implementation of Transitions of a GPSSMs.
+    """Implementation of Transitions of the first n states.
 
     Parameters
     ----------
-    likelihoods: list of Likelihood.
-        list of likelihoods for each component.
+    dim_states: int.
+        State dimension.
+    variance: float.
+        Initial variance estimate.
+    learnable: bool.
+        Flag that indicates if parameters are learnable.
 
-    Examples
-    --------
-    >>> from gpytorch.distributions import MultivariateNormal
-    >>> import torch
-    >>> from torch import Size
-    >>> from gpytorch.likelihoods import GaussianLikelihood
-    >>> from torch.testing import assert_allclose
-    >>> dim_states, dim_outputs = 3, 2
-    >>> batch_size, num_particles = 32, 8
-    >>> transitions = Transitions([GaussianLikelihood() for _ in range(dim_states)])
-    >>> deb = str(transitions)
-    >>> loc = torch.randn(dim_states, batch_size, num_particles)
-    >>> cov = torch.eye(num_particles)
-    >>> cov = cov.expand(dim_states, batch_size, num_particles, num_particles)
-    >>> next_f = MultivariateNormal(loc, cov)
-    >>> next_state = transitions(next_f)
     """
 
-    def __init__(self, likelihoods: List[Likelihood]) -> None:
+    def __init__(self, dim_states: int, variance: float = 1.0, learnable: bool = True):
         super().__init__()
-        self.likelihoods = likelihoods
-        for idx, likelihood in enumerate(likelihoods):
-            self.add_module('transition_{}'.format(idx), likelihood)
+        self.dim_states = dim_states
+        self.sd_noise = nn.Parameter(torch.ones(dim_states) * np.sqrt(variance),
+                                     requires_grad=learnable)
 
     def __str__(self) -> str:
-        """Return transition model parameters as a string."""
-        string = ""
-        for i in range(len(self.likelihoods)):
-            noise_str = str(
-                self.likelihoods[i].noise_covar.noise.detach())  # type: ignore
-            string += " component {} {}\n".format(i, noise_str)
-        return string
+        """Return emission model parameters as a string."""
+        return str(self.sd_noise.detach().numpy() ** 2)
 
     def forward(self, *args: MultivariateNormal, **kwargs) -> MultivariateNormal:
-        """Compute the conditional or marginal distribution of the transmission.
-
-         If f_samples is a Tensor (or a List of Tensors) then compute the conditional
-         p(x|f).
-         If f_samples is a MultivariateNormal (or a List of Multivariate Normals) then
-         compute the marginal p(x).
+        """Compute the marginal distribution of the transmission.
 
         Parameters
         ----------
         args: MultivariateNormal.
-            State of dimension dim_state x batch_size x num_particles.
+            State of dimension batch_size x dim_state x num_particles.
 
         Returns
         -------
         next_state: MultivariateNormal.
-            Next state of dimension dim_state x batch_size x num_particles.
+            Next state of dimension batch_size x dim_state x num_particles.
         """
         f_samples = args[0]
-        out = [self.likelihoods[i](MultivariateNormal(
-            f_samples.loc[:, i], f_samples.covariance_matrix[:, i]
-        ), *args[1:], **kwargs)
-               for i in range(len(self.likelihoods))]
+        batch_size, dim_state, num_particles = f_samples.loc.shape
+        cov = torch.diag_embed((self.sd_noise ** 2).expand(
+            batch_size, num_particles, dim_state).permute(0, 2, 1))
 
-        loc = torch.stack([f.loc for f in out], dim=1)
-        cov = torch.stack([f.covariance_matrix for f in out], dim=1)
-        return MultivariateNormal(loc, cov)
+        return MultivariateNormal(f_samples.loc, f_samples.lazy_covariance_matrix + cov)

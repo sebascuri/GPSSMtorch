@@ -78,8 +78,8 @@ class GPSSM(nn.Module, ABC):
         string += "Forward Model\n{}\n".format(self.forward_model)
         if self.backward_model is not None:
             string = "Backward Model\n{}\n".format(self.backward_model)
-        string += "Emission\n{}\n".format(self.emissions)
-        string += "Transition\n{}\n".format(self.transitions)
+        string += "Emission {}\n\n".format(self.emissions)
+        string += "Transition {}\n\n".format(self.transitions)
         string += "Prior x1 {}\n\n".format(self.prior_recognition)
         string += "Posterior x1 {}\n".format(self.posterior_recognition)
 
