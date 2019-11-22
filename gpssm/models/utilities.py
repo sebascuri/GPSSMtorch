@@ -74,7 +74,7 @@ def init_recognition(dim_outputs: int, dim_inputs: int, dim_states: int,
     return recognition
 
 
-def init_emissions(dim_outputs: int, variance: float = None, learnable: bool = True,
+def init_emissions(dim_outputs: int, variance: float = 1.0, learnable: bool = True,
                    shared: bool = False) -> Emissions:
     """Initialize emission model.
 
