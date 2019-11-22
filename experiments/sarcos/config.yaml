@@ -1,12 +1,12 @@
 dataset:
   name: [Sarcos]
-  sequence_length: 250
-  sequence_stride: 10
+  sequence_length: 100
+  sequence_stride: 1
 
 optimization:
   learning_rate: 0.05
-  batch_size: 16
-  num_epochs: 8
+  batch_size: 32
+  num_epochs: 1
 
 evaluation:
   plots: ['training_loss', 'prediction']
@@ -30,23 +30,23 @@ model:
     variance: 0.0002
     learnable: False
   forward_gps:
-    shared: False
     mean:
       kind: 'zero'  # zero, constant, linear.
     kernel:
-      kind: 'matern 3/2'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
+      shared: True
+      kind: 'rbf'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
       ard_num_dims:  # if empty will automatically select dim_states + dim_inputs.
       outputscale: 0.25
       lengthscale: 2.0
       learn_outputscale: True
       learn_lengthscale: True
     inducing_points:
-      number_points: 20
+      number_points: 50
       strategy: 'uniform'
-      scale: 2.0
+      scale: 6.0
       learnable: True
     variational_distribution:
       learn_mean: True
-      mean: 0.0025
+      mean: 0.0
       learn_var: True
-      var: 0.0002
+      var: 0.001
