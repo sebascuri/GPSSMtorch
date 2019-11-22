@@ -195,7 +195,7 @@ class GPSSM(nn.Module, ABC):
             state_d = self.prior_recognition(output_sequence, input_sequence)
 
         state = state_d.rsample(sample_shape=torch.Size([num_particles]))
-        state = state.permute(1, 2, 0)
+        state = state.permute(1, 2, 0)  # Move last component to end.
         # assert state.shape == Size([batch_size, dim_states, num_particles])
 
         ############################################################################
@@ -229,7 +229,7 @@ class GPSSM(nn.Module, ABC):
 
             # Input: Torch (batch_size x dim_inputs x num_particles)
             u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
-            u = u.permute(1, 2, 0)
+            u = u.permute(1, 2, 0)  # Move last component to end.
             # assert u.shape == Size([batch_size, dim_inputs, num_particles])
 
             # \hat{X}: Torch (batch_size x dim_states + dim_inputs x num_particles)
@@ -238,7 +238,7 @@ class GPSSM(nn.Module, ABC):
             #     [batch_size, dim_inputs + dim_states, num_particles])
 
             # next_f: Multivariate Normal (batch_size x state_dim x num_particles)
-            next_f = self.forward_model(state_input.permute(0, 2, 1))
+            next_f = self.forward_model(state_input)
             # assert next_f.loc.shape == Size([batch_size, dim_states, num_particles])
             # assert next_f.covariance_matrix.shape == Size(
             #     [batch_size, dim_states, num_particles, num_particles])
@@ -270,7 +270,7 @@ class GPSSM(nn.Module, ABC):
 
             # state: Tensor (batch_size x dim_states x num_particles)
             state_d = next_state
-            state = state_d.rsample()  # .permute(1, 2, 0)
+            state = state_d.rsample()
             # assert state.shape == Size([batch_size, dim_states, num_particles])
 
             ############################################################################

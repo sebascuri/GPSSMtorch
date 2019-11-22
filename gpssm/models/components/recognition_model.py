@@ -83,7 +83,7 @@ class OutputRecognition(Recognition):
                  length: int = 1, variance: float = 1.0) -> None:
         super().__init__(dim_outputs, dim_inputs, dim_states, length)
         self.sd_noise = nn.Parameter(torch.ones(self.dim_states) * np.sqrt(variance),
-                                     requires_grad=True)
+                                     requires_grad=True)  # TODO: add learnable.
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""

@@ -302,7 +302,8 @@ class ModelList(nn.Module):
 
     def forward(self, *args, **kwargs):
         """Forward propagate all models."""
-        next_f = [model(*args, **kwargs) for model in self.models]
+        state_input = args[0].permute(0, 2, 1)
+        next_f = [model(state_input, *args[1:], **kwargs) for model in self.models]
         loc = torch.stack([f.loc for f in next_f], dim=1)
         cov = torch.stack([f.covariance_matrix for f in next_f], dim=1)
         if not self.training:

@@ -1,10 +1,10 @@
 dataset:
-  name: [BallBeam]
+  name: [Actuator]
   sequence_length: 20
   sequence_stride: 1
 
 optimization:
-  learning_rate: 0.1
+  learning_rate: 0.01
   batch_size: 32
   num_epochs: 5
 
