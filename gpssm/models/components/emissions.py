@@ -69,18 +69,18 @@ class Emissions(nn.Module):
         Parameters
         ----------
         args: Tensor.
-            State of dimension batch_size x num_particles x dim_state.
+            State of dimension batch_size x dim_state x num_particles.
 
         Returns
         -------
         y: Normal.
-            Output of dimension dim_output x batch_size x num_particles.
+            Output of dimension batch_size x dim_outputs x num_particles.
         """
         state = args[0]
-        y = [self.likelihoods[i](state[..., i], *args[1:], **kwargs)
+        y = [self.likelihoods[i](state[:, i], *args[1:], **kwargs)
              for i in range(self.dim_outputs)]
-        loc = torch.stack([yi.loc for yi in y])
-        cov = torch.stack([yi.scale for yi in y])
+        loc = torch.stack([yi.loc for yi in y], dim=1)
+        cov = torch.stack([yi.scale for yi in y], dim=1)
         return Normal(loc, cov)
 
 
@@ -111,16 +111,15 @@ class EmissionsNN(nn.Module):
         Parameters
         ----------
         args: Tensor.
-            State of dimension batch_size x num_particles x dim_state.
+            State of dimension batch_size x dim_state x num_particles.
 
         Returns
         -------
         y: Normal.
-            Output of dimension dim_output x batch_size x num_particles.
+            Output of dimension batch_size x dim_output x num_particles.
         """
 
         state = args[0]
-        loc = state[..., :self.dim_outputs].permute(
-            -1, *torch.arange(state.ndimension() - 1))
+        loc = state[:, :self.dim_outputs]
         cov = (self.sd_noise ** 2).expand(loc.shape)
         return Normal(loc, cov)

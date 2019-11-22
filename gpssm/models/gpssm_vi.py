@@ -125,8 +125,8 @@ class GPSSM(nn.Module, ABC):
         for t in range(sequence_length):
             # Output: Torch (dim_outputs)
             y = output_sequence[:, t].expand(1, batch_size, dim_outputs)
-            y = y.permute(2, 1, 0)
-            # assert y.shape == torch.Size([dim_outputs, batch_size, 1])
+            y = y.permute(1, 2, 0)
+            # assert y.shape == torch.Size([batch_size, dim_outputs, 1])
 
             y_pred = predicted_outputs[t]
             ############################################################################
@@ -188,15 +188,15 @@ class GPSSM(nn.Module, ABC):
         # dim_states = self.dim_states
         batch_size, sequence_length, dim_inputs = input_sequence.shape
 
-        # Initial State: Tensor (batch_size x num_particles x dim_states)
+        # Initial State: Tensor (batch_size x dim_states x num_particles)
         if self.training:
             state_d = self.posterior_recognition(output_sequence, input_sequence)
         else:
             state_d = self.prior_recognition(output_sequence, input_sequence)
 
         state = state_d.rsample(sample_shape=torch.Size([num_particles]))
-        state = state.permute(1, 0, 2)
-        # assert state.shape == Size([batch_size, num_particles, dim_states])
+        state = state.permute(1, 2, 0)
+        # assert state.shape == Size([batch_size, dim_states, num_particles])
 
         ############################################################################
         # SAMPLE GP for cubic sampling #
@@ -227,27 +227,27 @@ class GPSSM(nn.Module, ABC):
             # PREDICT Next State #
             ############################################################################
 
-            # Input: Torch (batch_size x num_particles x dim_inputs)
+            # Input: Torch (batch_size x dim_inputs x num_particles)
             u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
-            u = u.permute(1, 0, 2)
-            # assert u.shape == Size([batch_size, num_particles, dim_inputs])
+            u = u.permute(1, 2, 0)
+            # assert u.shape == Size([batch_size, dim_inputs, num_particles])
 
-            # \hat{X}: Torch (batch_size x num_particles x dim_states + dim_inputs)
-            state_input = torch.cat((state, u), dim=-1)
+            # \hat{X}: Torch (batch_size x dim_states + dim_inputs x num_particles)
+            state_input = torch.cat((state, u), dim=1)
             # assert state_input.shape == Size(
-            #     [batch_size, num_particles, dim_inputs + dim_states])
+            #     [batch_size, dim_inputs + dim_states, num_particles])
 
-            # next_f: Multivariate Normal (state_dim x batch_size x num_particles)
-            next_f = self.forward_model(state_input)
-            # assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
+            # next_f: Multivariate Normal (batch_size x state_dim x num_particles)
+            next_f = self.forward_model(state_input.permute(0, 2, 1))
+            # assert next_f.loc.shape == Size([batch_size, dim_states, num_particles])
             # assert next_f.covariance_matrix.shape == Size(
-            #     [dim_states, batch_size, num_particles, num_particles])
+            #     [batch_size, dim_states, num_particles, num_particles])
 
-            # next_state: Multivariate Normal (state_dim x batch_size x num_particles)
+            # next_state: Multivariate Normal (batch_size x dim_states x num_particles)
             next_state = self.transitions(next_f)
-            # assert next_f.loc.shape == Size([dim_states, batch_size, num_particles])
+            # assert next_f.loc.shape == Size([batch_size, dim_states, num_particles])
             # assert next_f.covariance_matrix.shape == Size(
-            #     [dim_states, batch_size, num_particles, num_particles])
+            #     [batch_size, dim_states, num_particles, num_particles])
             # assert (next_state.loc == next_f.loc).all()
             # assert not (next_state.covariance_matrix ==next_f.covariance_matrix).all()
 
@@ -268,10 +268,10 @@ class GPSSM(nn.Module, ABC):
             # RESAMPLE State #
             ############################################################################
 
-            # state: Tensor (batch_size x num_particles x dim_states)
+            # state: Tensor (batch_size x dim_states x num_particles)
             state_d = next_state
-            state = state_d.rsample().permute(1, 2, 0)
-            # assert state.shape == Size([batch_size, num_particles, dim_states])
+            state = state_d.rsample()  # .permute(1, 2, 0)
+            # assert state.shape == Size([batch_size, dim_states, num_particles])
 
             ############################################################################
             # PREDICT Outputs #
@@ -280,7 +280,7 @@ class GPSSM(nn.Module, ABC):
             y_pred = self.emissions(state)
             outputs.append(y_pred)
 
-        # assert len(outputs) == sequence_length
+        assert len(outputs) == sequence_length
         return outputs
 
     @torch.jit.export
@@ -295,16 +295,16 @@ class GPSSM(nn.Module, ABC):
         for t in reversed(range(sequence_length)):
             y = output_sequence[:, t]
             y_ = self.emissions(y)
-            # assert y_.loc.shape == Size([dim_outputs, batch_size])
-            # assert y_.scale.shape == Size([dim_outputs, batch_size])
+            # assert y_.loc.shape == Size([batch_size, dim_outputs])
+            # assert y_.scale.shape == Size([batch_size, dim_outputs])
 
-            loc = torch.cat((y_.loc, torch.zeros(dim_delta, batch_size)))
-            loc = loc.expand(num_particles, dim_states, batch_size).permute(1, 2, 0)
-            # assert loc.shape == Size([dim_states, batch_size, num_particles])
+            loc = torch.cat((y_.loc, torch.zeros(batch_size, dim_delta)), dim=1)
+            loc = loc.expand(num_particles, batch_size, dim_states).permute(1, 2, 0)
+            # assert loc.shape == Size([batch_size, dim_states, num_particles])
 
-            cov = torch.cat((y_.scale, torch.ones(dim_delta, batch_size)))
-            cov = cov.expand(num_particles, dim_states, batch_size).permute(1, 2, 0)
-            # assert cov.shape == Size([dim_states, batch_size, num_particles])
+            cov = torch.cat((y_.scale, torch.ones(batch_size, dim_delta)), dim=1)
+            cov = cov.expand(num_particles, batch_size, dim_states).permute(1, 2, 0)
+            # assert cov.shape == Size([batch_size, dim_states, num_particles])
 
             # TODO: IMPLEMENT BACKWARDS-PASS
             outputs.append(Normal(loc, cov))

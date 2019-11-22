@@ -303,8 +303,8 @@ class ModelList(nn.Module):
     def forward(self, *args, **kwargs):
         """Forward propagate all models."""
         next_f = [model(*args, **kwargs) for model in self.models]
-        loc = torch.stack([f.loc for f in next_f])
-        cov = torch.stack([f.covariance_matrix for f in next_f])
+        loc = torch.stack([f.loc for f in next_f], dim=1)
+        cov = torch.stack([f.covariance_matrix for f in next_f], dim=1)
         if not self.training:
             cov += 1e-4 * torch.eye(cov.shape[-1]).expand(*cov.shape)
         return MultivariateNormal(loc, cov)

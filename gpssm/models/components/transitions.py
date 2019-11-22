@@ -72,10 +72,10 @@ class Transitions(nn.Module):
         """
         f_samples = args[0]
         out = [self.likelihoods[i](MultivariateNormal(
-            f_samples.loc[i], f_samples.covariance_matrix[i]
+            f_samples.loc[:, i], f_samples.covariance_matrix[:, i]
         ), *args[1:], **kwargs)
                for i in range(len(self.likelihoods))]
 
-        loc = torch.stack([f.loc for f in out])
-        cov = torch.stack([f.covariance_matrix for f in out])
+        loc = torch.stack([f.loc for f in out], dim=1)
+        cov = torch.stack([f.covariance_matrix for f in out], dim=1)
         return MultivariateNormal(loc, cov)
