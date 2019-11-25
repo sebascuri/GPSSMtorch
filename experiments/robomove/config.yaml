@@ -1,47 +1,57 @@
 dataset:
-  name: [RobomoveSimple, Robomove]
-  sequence_length: 50
+  name: [RobomoveSimple]
+  sequence_length: 300
+  sequence_stride: 50
 
 optimization:
   learning_rate: 0.1
-  batch_size: 16
+  batch_size: 32
   num_epochs: 5
+  curriculum: False
 
-plots: ['prediction']
+plots: ['training_loss', 'prediction']
 
 model:
   name: ['PRSSM', 'CBFSSM']
   dim_states: 4
-  num_particles: 100
+  num_particles: 50
   loss_key: 'elbo'
+  loss_factors:
+    loglik: 1.0 # Log-likelihood factor.
+    kl_uf: 0.0  # KL-divergence of the variational distribution (with prior) of the forward model factor.
+    kl_ub: 0.0  # KL-divergence of the variational distribution (with prior) of the backward model factor.
+    kl_x: 1.0  # KL-divergence of the output of the recognition model (with prior p(x1)) factor.
+    entropy: 0.0
 
   recognition:
     length: 1
     kind: 'output'
-    variance: 1.0
+    variance: 0.1
     learnable: True
   emissions:
     variance: 1.0
     learnable: True
   transitions:
-    variance: 0.0001
+    variance: 0.001
     learnable: True
   forward_gps:
-    shared: False
     mean:
-      kind: 'constant'
+      kind: 'zero'  # Strategies: zero, constant, linear.
     kernel:
-      kind: 'rbf'
-#      ard_num_dims: 5
-      outputscale: 0.1
-      lengthscale: 2.0
-      learn_outputscale: True
-      learn_lengthscale: True
+      shared: False  # Shared parameters between components flag.
+      kind: 'rbf'  # Strategies: rbf, matern 1/2, matern 3/2, matern 5/2, linear
+      ard_num_dims:  # Number of ard dimensions. if empty will automatically select dim_states + dim_inputs.
+      outputscale: 0.01  # Initial variance estimate.
+      lengthscale: 1.0  # Initial lengthscale estimate.
+      learn_outputscale: True  # Learnable parameters flag.
+      learn_lengthscale: True  # Learnable parameters flag.
     inducing_points:
-      number_points: 100
-      strategy: 'normal'
-      scale: 2.0
-      learnable: True
+      number_points: 50  # Number of inducing points per (GP).
+      strategy: 'uniform'  # Initialization strategies: normal, uniform, or linspace.
+      scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
+      learnable: True  # Learnable parameters flag.
     variational_distribution:
-      learn_mean: True
-      learn_var: True
+      learn_mean: True  # Learnable parameters flag.
+      mean: 0.001  # Initial mean estimate.
+      learn_var: True # Learnable parameters flag.
+      var: 0.0001  # Initial variance estimate.
