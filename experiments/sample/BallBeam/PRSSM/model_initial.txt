@@ -1,0 +1,15 @@
+Model Parameters: 
+
+Forward Model
+ component 0 
+	outputscale: 0.10000000149011612
+ 	lengthscale: tensor([[2., 2.]]) 
+
+Emission
+[1.]
+Transition
+ component 0 tensor([1.0000e-04])
+
+Prior x1 [1.]
+
+Posterior x1 [1.]
