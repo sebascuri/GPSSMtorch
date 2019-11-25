@@ -39,6 +39,8 @@ class GPSSM(nn.Module, ABC):
         Cubic Sampling strategy
     loss_key: str.
         Key to select loss to return, default ELBO.
+    k_factor: float.
+
     loss_factors: dict.
         Factors to multiply each term of the ELBO with.
 
@@ -54,6 +56,7 @@ class GPSSM(nn.Module, ABC):
                  backward_model: VariationalGP = None,
                  cubic_sampling: bool = False,
                  loss_key: str = 'elbo',
+                 k_factor: float = 1.,
                  loss_factors: dict = None) -> None:
         super().__init__()
         self.dim_states = forward_model.num_outputs
@@ -68,6 +71,7 @@ class GPSSM(nn.Module, ABC):
         self.num_particles = num_particles
         self.cubic_sampling = cubic_sampling
         self.loss_key = loss_key
+        self.k_factor = k_factor
         if loss_factors is None:
             loss_factors = dict(loglik=1., kl_uf=1., kl_ub=1., kl_x=1., entropy=1.)
         self.loss_factors = loss_factors
@@ -352,23 +356,25 @@ class CBFSSM(GPSSM):
         Parameters
         ----------
         next_x: MultivariateNormal.
-            Covariance state_dim x batch_size x num_particles x num_particles.
+            Covariance batch_size x state_dim x num_particles x num_particles.
         next_y: Normal.
-            Scale state_dim x batch_size x num_particles.
+            Scale batch_size x state_dim x num_particles.
 
         Returns
         -------
         next_x: MultivariateNormal.
-            Covariance state_dim x batch_size x num_particles x num_particles.
+            Covariance batch_size x state_dim x num_particles x num_particles.
         """
         error = next_x.loc - next_y.loc
 
         sigma_f = torch.diagonal(next_x.covariance_matrix, dim1=-1, dim2=-2)
-        sigma_y = next_y.scale
+        sigma_y = next_y.scale + (self.k_factor - 1) * sigma_f
+
         gain = sigma_f / (sigma_f + sigma_y)
         neg_gain = torch.diag_embed(1 - gain)
 
         loc = next_x.loc + gain * error
+
         cov = torch.diag_embed(gain.pow(2) * sigma_y)
-        cov += neg_gain @ next_x.covariance_matrix @ neg_gain
+        cov += neg_gain.transpose(-2, -1) @ next_x.covariance_matrix @ neg_gain
         return MultivariateNormal(loc, cov)
