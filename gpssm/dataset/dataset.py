@@ -95,10 +95,10 @@ class Dataset(data.TensorDataset):
             self.dim_inputs, self.dim_outputs, self.dim_states
         )
         string += 'sequence length: {} \n'.format(
-            self.outputs.shape[1]
+            self.tensors[0].shape[1]
         )
         string += 'train_samples: {} \ntrain_sequences: {} \n'.format(
-            self.experiment_length, self.outputs.shape[0]
+            self.experiment_length, self.tensors[0].shape[0]
         )
         return string
 
