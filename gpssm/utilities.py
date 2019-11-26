@@ -184,9 +184,8 @@ def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs
             # Zero the gradients of the Optimizer
             optimizer.zero_grad()
 
-            # Compute the elbo
-            predicted_outputs = model(outputs, inputs)
-            loss = model.loss(predicted_outputs, outputs, inputs)
+            # Compute the loss.
+            predicted_outputs, loss = model.forward(outputs, inputs)
 
             # Back-propagate
             loss.backward()
@@ -230,7 +229,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
     with torch.no_grad(), gpytorch.settings.fast_pred_var():
         model.eval()
         for inputs, outputs, states in dataloader:
-            predicted_outputs = model(outputs, inputs)
+            predicted_outputs, _ = model(outputs, inputs)
             predicted_outputs = approximate_with_normal(predicted_outputs)
 
             mean = predicted_outputs.loc.detach().numpy()

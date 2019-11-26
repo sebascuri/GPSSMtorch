@@ -6,7 +6,7 @@ import torch
 import torch.jit
 import torch.nn as nn
 from torch.distributions import kl_divergence, Normal
-from typing import List
+from typing import List, Tuple
 from gpytorch.distributions import MultivariateNormal
 
 from .components.dynamics import Dynamics, IdentityDynamics
@@ -76,7 +76,8 @@ class GPSSM(nn.Module, ABC):
         self.loss_key = loss_key
         self.k_factor = k_factor
         if loss_factors is None:
-            loss_factors = dict(loglik=1., kl_uf=1., kl_ub=1., kl_x=1., entropy=1.)
+            loss_factors = dict(loglik=1., kl_uf=1., kl_ub=1., kl_x=1.,
+                                kl_conditioning=1.0, entropy=0.)
         self.loss_factors = loss_factors
 
     def __str__(self) -> str:
@@ -108,71 +109,7 @@ class GPSSM(nn.Module, ABC):
             file.write(str(self))
 
     @torch.jit.export
-    def loss(self, predicted_outputs: List[Normal], output_sequence: Tensor,
-             input_sequence: Tensor) -> Tensor:
-        """Calculate the between the predicted and the true sequence.
-
-        Parameters
-        ----------
-        predicted_outputs: List[Normal].
-            List of predicted distributions [batch_size x num_particle x dim_outputs].
-        output_sequence: Tensor.
-            Tensor of output data of size [batch_size x sequence_length x dim_outputs].
-        input_sequence: Tensor.
-            Tensor of input data of size [batch_size x sequence_length x dim_inputs].
-
-        Returns
-        -------
-        loss: Tensor.
-            Differentiable loss tensor of sequence.
-        """
-        batch_size, sequence_length, dim_outputs = output_sequence.shape
-        log_lik = torch.tensor(0.)
-        l2 = torch.tensor(0.)
-        for t in range(sequence_length):
-            # Output: Torch (dim_outputs)
-            y = output_sequence[:, t].expand(1, batch_size, dim_outputs)
-            y = y.permute(1, 2, 0)
-            # assert y.shape == Size([batch_size, dim_outputs, 1])
-
-            y_pred = predicted_outputs[t]
-            ############################################################################
-            # Calculate the Log-likelihood and L2-error #
-            ############################################################################
-
-            log_lik += y_pred.log_prob(y).mean()
-            l2 += ((y_pred.loc - y) ** 2).mean()
-
-        ################################################################################
-        # Add KL Divergences #
-        ################################################################################
-        kl_uf = self.forward_model.kl_divergence() / sequence_length  # type: ignore
-        kl_x1 = kl_divergence(
-            self.posterior_recognition(output_sequence, input_sequence),
-            self.prior_recognition(output_sequence, input_sequence)
-        ).mean()
-
-        ################################################################################
-        # Return different keys. #
-        ################################################################################
-
-        if self.loss_key.lower() == 'loglik':
-            return -log_lik
-        elif self.loss_key.lower() == 'elbo':
-            # TODO: add backwards pass losses.
-            elbo = -(self.loss_factors['loglik'] * log_lik
-                     - self.loss_factors['kl_x'] * kl_x1
-                     - self.loss_factors['kl_uf'] * kl_uf)
-            return elbo
-        elif self.loss_key.lower() == 'l2':
-            return l2
-        elif self.loss_key.lower() == 'rmse':
-            return torch.sqrt(l2)
-        else:
-            raise NotImplementedError("Key {} not implemented".format(self.loss_key))
-
-    @torch.jit.export
-    def forward(self, *inputs: Tensor, **kwargs) -> List[Normal]:
+    def forward(self, *inputs: Tensor, **kwargs) -> Tuple[List[Normal], Tensor]:
         """Forward propagate the model.
 
         Parameters
@@ -194,6 +131,7 @@ class GPSSM(nn.Module, ABC):
         num_particles = self.num_particles
         # dim_states = self.dim_states
         batch_size, sequence_length, dim_inputs = input_sequence.shape
+        _, _, dim_outputs = output_sequence.shape
 
         ################################################################################
         # SAMPLE GP for cubic sampling #
@@ -215,12 +153,16 @@ class GPSSM(nn.Module, ABC):
         ################################################################################
         # Initial State #
         ################################################################################
+        q_x1 = self.posterior_recognition(output_sequence, input_sequence)
+        p_x1 = self.prior_recognition(output_sequence, input_sequence)
+        kl_x1 = kl_divergence(q_x1, p_x1).mean()
 
         # Initial State: Tensor (batch_size x dim_states x num_particles)
+
         if self.training:
-            state_d = self.posterior_recognition(output_sequence, input_sequence)
+            state_d = q_x1
         else:
-            state_d = self.prior_recognition(output_sequence, input_sequence)
+            state_d = p_x1
 
         state = state_d.rsample(sample_shape=Size([num_particles]))
         state = state.permute(1, 2, 0)  # Move last component to end.
@@ -232,6 +174,21 @@ class GPSSM(nn.Module, ABC):
         outputs = []
         y_pred = self.emissions(state)
         outputs.append(y_pred)
+
+        ################################################################################
+        # INITIALIZE losses #
+        ################################################################################
+        log_lik = torch.tensor(0.)
+        l2 = torch.tensor(0.)
+        kl_conditioning = torch.tensor(0.)
+        entropy = torch.tensor(0.)
+        if self.training:
+            y_pred = output_distribution[0]
+            y = output_sequence[:, 0].expand(1, batch_size, dim_outputs
+                                             ).permute(1, 2, 0)
+            log_lik += y_pred.log_prob(y).mean()
+            l2 += ((y_pred.loc - y) ** 2).mean()
+            entropy += y_pred.entropy().mean()
 
         for t in range(sequence_length - 1):
             ############################################################################
@@ -276,7 +233,9 @@ class GPSSM(nn.Module, ABC):
             # CONDITION Next State #
             ############################################################################
             if self.training:
+                p_next_state = next_state
                 next_state = self._condition(next_state, output_distribution[t + 1])
+                kl_conditioning += kl_divergence(next_state, p_next_state).mean()
 
             ############################################################################
             # RESAMPLE State #
@@ -290,12 +249,48 @@ class GPSSM(nn.Module, ABC):
             ############################################################################
             # PREDICT Outputs #
             ############################################################################
-
             y_pred = self.emissions(state)
             outputs.append(y_pred)
 
+            ############################################################################
+            # COMPUTE Losses #
+            ############################################################################
+            if self.training:
+                y_tilde = output_distribution[t + 1]
+                y = output_sequence[:, t + 1].expand(
+                    num_particles, batch_size, dim_outputs).permute(1, 2, 0)
+
+                log_lik += y_pred.log_prob(y).mean()
+                l2 += ((y_pred.loc - y) ** 2).mean()
+                entropy += y_tilde.entropy().mean() / sequence_length
+
         assert len(outputs) == sequence_length
-        return outputs
+
+        ################################################################################
+        # Compute model KL divergences Divergences #
+        ################################################################################
+        kl_uf = self.forward_model.kl_divergence() / sequence_length
+        kl_ub = self.backward_model.kl_divergence() / sequence_length
+
+        if self.loss_key.lower() == 'loglik':
+            loss = -log_lik
+        elif self.loss_key.lower() == 'elbo':
+            loss = -(self.loss_factors['loglik'] * log_lik
+                     - self.loss_factors['kl_x'] * kl_x1
+                     - self.loss_factors['kl_uf'] * kl_uf
+                     - self.loss_factors['kl_ub'] * kl_ub
+                     - self.loss_factors['kl_conditioning'] * kl_conditioning
+                     + self.loss_factors['entropy'] * entropy
+                     )
+            # print(log_lik, kl_x1, kl_uf, kl_ub, kl_conditioning, entropy)
+        elif self.loss_key.lower() == 'l2':
+            loss = l2
+        elif self.loss_key.lower() == 'rmse':
+            loss = torch.sqrt(l2)
+        else:
+            raise NotImplementedError("Key {} not implemented".format(self.loss_key))
+
+        return outputs, loss
 
     @torch.jit.export
     def backward(self, *inputs: Tensor) -> List[Normal]:
