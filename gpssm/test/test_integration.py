@@ -1,9 +1,15 @@
 """Integration test."""
+import pytest
 from gpssm.run import main, Experiment
 import yaml
 
 
-def test_integration():
+@pytest.fixture(params=['PRSSM', 'CBFSSM', 'CBFSSM-HALF'])
+def method(request):
+    return request.param
+
+
+def test_integration(method):
     """Test project running integration."""
     config_file = 'experiments/test/config.yaml'
     with open(config_file, 'r') as file:
@@ -12,4 +18,5 @@ def test_integration():
     configs.get('dataset', {}).pop('name', {})
     configs['name'] = config_file.split('/')[1]
 
-    main(Experiment('CBFSSM', 'Actuator', 0, configs), 2)
+    main(Experiment(method, 'Actuator', 0, configs), 2)
+    assert True

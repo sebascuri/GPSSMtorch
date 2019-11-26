@@ -4,26 +4,27 @@ dataset:
   sequence_stride: 1
 
 optimization:
-  learning_rate: 0.01
-  batch_size: 32
-  num_epochs: 5
+  learning_rate: 0.1  # Learning rate of the optimizer (for now, Adam).
+  batch_size: 32  # Batch size of each itertion.
+  num_epochs: 1  # Number of epochs to train the data.
+  curriculum: False # Flag that indicates if there is a curriculum.
 
 evaluation:
   plots: ['training_loss', 'prediction']
   length: [] # Here add extra evaluation lengths.
 
 model:
-  name: ['PRSSM']  # PRSSM, CBFSSM
+  name: ['PRSSM']  # PRSSM, CBFSSM, CBFSSM-HALF
   dim_states: 4
-  num_particles: 50
+  num_particles: 20
   loss_key: 'elbo'
   loss_factors:  # These factors multiply each term of the ELBO.
     loglik: 1.0 # Log-likelihood factor.
     kl_uf: 1.0  # KL-divergence of the variational distribution (with prior) of the forward model factor.
     kl_ub: 1.0  # KL-divergence of the variational distribution (with prior) of the backward model factor.
     kl_x: 1.0  # KL-divergence of the output of the recognition model (with prior p(x1)) factor.
-    entropy: 1.0  # Entropy of the backwards model prior.
-
+    kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
+    entropy: 0.0  # Entropy of the backwards model predictions.
   recognition:
     length: 1
     kind: 'output'  # output, zero, nn, conv, lstm, bi-lstm.

@@ -23,7 +23,8 @@ model:
     kl_uf: 1.0  # KL-divergence of the variational distribution (with prior) of the forward model factor.
     kl_ub: 1.0  # KL-divergence of the variational distribution (with prior) of the backward model factor.
     kl_x: 1.0  # KL-divergence of the output of the recognition model (with prior p(x1)) factor.
-    entropy: 1.0  # Entropy of the backwards model prior.
+    kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
+    entropy: 1.0  # Entropy of the backwards model predictions.
   recognition:
     length: 1  # Length of recognition sequence.
     kind: 'output'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.

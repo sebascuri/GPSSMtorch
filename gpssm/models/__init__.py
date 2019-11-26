@@ -7,11 +7,13 @@ def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = 
     """Get GPSSM Model."""
     dim_states = max(dim_states if dim_states is not None else dim_outputs, dim_outputs)
 
-    forward_model = init_dynamics(dim_inputs + dim_states, dim_states,
-                                  **kwargs.pop('forward', {}))  # type: ignore
+    f_config = kwargs.pop('forward', {})
+    forward_model = init_dynamics(dim_inputs + dim_states, dim_states, **f_config
+                                  )  # type: ignore
 
     backward_model = init_dynamics(dim_inputs + dim_states, dim_states - dim_outputs,
-                                   **kwargs.pop('backward', {}))  # type: ignore
+                                   **kwargs.pop('backward', f_config)
+                                   )  # type: ignore
 
     transitions = init_transitions(dim_states,
                                    **kwargs.pop('transitions', {}))  # type: ignore

@@ -1,6 +1,7 @@
 """Implementation of GP Models."""
 
 import torch
+from torch import nn as nn
 from torch import Tensor
 from abc import ABC
 from gpytorch.distributions import MultivariateNormal
@@ -17,8 +18,6 @@ __all__ = ['Dynamics', 'IdentityDynamics',
            'GPDynamics', 'ExactGPModel', 'VariationalGP']
 
 
-# TODO: Make the dynamics a nn.Module
-
 class Dynamics(ABC):
     """Dynamics Model.
 
@@ -30,6 +29,10 @@ class Dynamics(ABC):
     def __init__(self, num_outputs: int):
         self.num_outputs = num_outputs
 
+    def parameters(self):
+        """Get learnable parameters."""
+        raise NotImplementedError
+
     def __call__(self, *args: Tensor, **kwargs) -> MultivariateNormal:
         """Call a Dynamical System at a given state-input pair."""
         raise NotImplementedError
@@ -39,13 +42,29 @@ class Dynamics(ABC):
         return torch.tensor(0.0)
 
 
-class IdentityDynamics(Dynamics):
+class NNDynamics(nn.Module, Dynamics):
+    """GPDynamics is a Dynamical model defined over GPs.
+
+    Parameters
+    ----------
+    num_outputs: int.
+        Number of outputs in model.
+    """
+
+    def __init__(self, num_outputs: int) -> None:
+        Dynamics.__init__(self, num_outputs)
+        nn.Module.__init__(self)
+
+    def __str__(self) -> str:
+        """Return GP parameters as a string."""
+        return ""
+
+
+class IdentityDynamics(NNDynamics):
     """Dynamics that returns the same state."""
 
-    def __init__(self, num_outputs: int):
-        super().__init__(num_outputs)
-
-    def __call__(self, *args: Tensor, **kwargs) -> MultivariateNormal:
+    def forward(self, *args: Tensor, **kwargs) -> MultivariateNormal:
+        """Call a Dynamical System at a given state-input pair."""
         state_input = args[0]
         batch_size, _, num_particles = state_input.shape
         state_input = args[0]
@@ -70,7 +89,7 @@ class GPDynamics(Dynamics):
     """
 
     def __init__(self, num_outputs: int, mean: Mean, kernel: Kernel) -> None:
-        super().__init__(num_outputs)
+        Dynamics.__init__(self, num_outputs)
         self.mean_module = mean
         self.covar_module = kernel
 
@@ -81,7 +100,7 @@ class GPDynamics(Dynamics):
         return "\toutputscale: {}\n \tlengthscale: {}".format(outputscale, lengthscale)
 
 
-class ExactGPModel(GPDynamics, ExactGP):
+class ExactGPModel(ExactGP, GPDynamics):
     """An Exact GP Model implementation.
 
     Exact GP Models require that all states are measured and the dimension of y and x
@@ -167,7 +186,7 @@ class ExactGPModel(GPDynamics, ExactGP):
         return MultivariateNormal(mean_x, covar_x)
 
 
-class VariationalGP(GPDynamics, AbstractVariationalGP):
+class VariationalGP(AbstractVariationalGP, GPDynamics):
     """Sparse Variational GP Class.
 
     Parameters
@@ -242,6 +261,7 @@ class VariationalGP(GPDynamics, AbstractVariationalGP):
             self, inducing_points, variational_distribution,
             learn_inducing_locations=learn_inducing_loc
         )
+
         AbstractVariationalGP.__init__(self, variational_strategy)
         GPDynamics.__init__(self, inducing_points.shape[0], mean, kernel)
 

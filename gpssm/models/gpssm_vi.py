@@ -84,8 +84,7 @@ class GPSSM(nn.Module, ABC):
         """Return string of object with parameters."""
         string = "Model Parameters: \n\n"
         string += "Forward Model\n{}\n".format(self.forward_model)
-        if self.backward_model is not None:
-            string = "Backward Model\n{}\n".format(self.backward_model)
+        string += "Backward Model\n{}\n".format(self.backward_model)
         string += "Emission {}\n\n".format(self.emissions)
         string += "Transition {}\n\n".format(self.transitions)
         string += "Prior x1 {}\n\n".format(self.prior_recognition)
@@ -97,6 +96,7 @@ class GPSSM(nn.Module, ABC):
         """Return list of learnable parameters."""
         return [
             {'params': self.forward_model.parameters()},  # type: ignore
+            {'params': self.backward_model.parameters()},  # type: ignore
             {'params': self.emissions.parameters()},
             {'params': self.transitions.parameters()},
             {'params': self.prior_recognition.parameters()},
@@ -262,7 +262,7 @@ class GPSSM(nn.Module, ABC):
 
                 log_lik += y_pred.log_prob(y).mean()
                 l2 += ((y_pred.loc - y) ** 2).mean()
-                entropy += y_tilde.entropy().mean() / sequence_length
+                entropy += y_tilde.entropy().mean()
 
         assert len(outputs) == sequence_length
 
