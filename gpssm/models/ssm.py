@@ -95,8 +95,8 @@ class SSM(nn.Module, ABC):
     def properties(self) -> list:
         """Return list of learnable parameters."""
         return [
-            {'params': self.forward_model.parameters()},  # type: ignore
-            {'params': self.backward_model.parameters()},  # type: ignore
+            {'params': self.forward_model.parameters()},
+            {'params': self.backward_model.parameters()},
             {'params': self.emissions.parameters()},
             {'params': self.transitions.parameters()},
             {'params': self.prior_recognition.parameters()},
@@ -139,7 +139,7 @@ class SSM(nn.Module, ABC):
         # if self.cubic_sampling:
         #     # TODO: Change inducing points only (and inducing variables) :).
         #     forward_model = self.forward_model.sample_gp(
-        #         self.transitions.likelihoods)  # type: ignore
+        #         self.transitions.likelihoods)
         #     forward_model.eval()
         # else:
         #     forward_model = self.forward_model

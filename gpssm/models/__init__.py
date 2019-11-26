@@ -9,17 +9,17 @@ def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = 
 
     f_config = kwargs.pop('forward', {})
     forward_model = init_dynamics(dim_inputs + dim_states, dim_states, **f_config
-                                  )  # type: ignore
+                                  )
 
     backward_model = init_dynamics(dim_inputs + dim_states, dim_states - dim_outputs,
                                    **kwargs.pop('backward', f_config)
-                                   )  # type: ignore
+                                   )
 
     transitions = init_transitions(dim_states,
-                                   **kwargs.pop('transitions', {}))  # type: ignore
+                                   **kwargs.pop('transitions', {}))
     emission = init_emissions(dim_outputs,
-                              **kwargs.pop('emissions', {}))  # type: ignore
-    recognition = init_recognition(dim_outputs, dim_inputs, dim_states,  # type: ignore
+                              **kwargs.pop('emissions', {}))
+    recognition = init_recognition(dim_outputs, dim_inputs, dim_states,
                                    **kwargs.pop('recognition', {}))
 
     if model_.lower() == 'prssm':

@@ -20,7 +20,7 @@ if __name__ == "__main__":
     models = configs.get('model').pop('name')
     datasets = configs.get('dataset').pop('name')
 
-    results = {}  # type: ignore
+    results = {}  # type: dict
     splits = ['train']
     keys = ['loglik', 'rmse']
 
