@@ -35,7 +35,7 @@ model:
   transitions:
     variance: 0.0001
     learnable: True
-  forward_gps:
+  forward:
     mean:
       kind: 'zero'  # zero, constant, linear.
     kernel:

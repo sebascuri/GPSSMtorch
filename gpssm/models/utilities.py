@@ -13,7 +13,7 @@ from gpytorch.variational import CholeskyVariationalDistribution
 from typing import Tuple
 
 __author__ = 'Sebastian Curi'
-__all__ = ['init_emissions', 'init_transitions', 'init_gps', 'init_recognition']
+__all__ = ['init_emissions', 'init_transitions', 'init_dynamics', 'init_recognition']
 
 
 def init_recognition(dim_outputs: int, dim_inputs: int, dim_states: int,
@@ -116,17 +116,23 @@ def init_transitions(dim_states: int, variance: float = 0.01, learnable: bool = 
     return Transitions(dim_states, variance, learnable)
 
 
-def init_gps(dim_inputs: int, dim_states: int, kernel: dict = None, mean: dict = None,
-             inducing_points: dict = None, variational_distribution: dict = None
-             ) -> VariationalGP:
-    """Initialize GP Model.
+def init_dynamics(dim_inputs: int, dim_outputs: int, kernel: dict = None,
+                       mean: dict = None, inducing_points: dict = None,
+                       variational_distribution: dict = None) -> VariationalGP:
+    """Initialize dynamical Model.
+
+    # TODO: Implement other function approximations such as NN.
 
     Parameters
     ----------
     dim_inputs:
-        Dimension of inputs.
-    dim_states: int.
-        Dimension of hidden states.
+        Dimension of inputs to dynamical model.
+        Forward model, usually dim_inputs + dim_states.
+        Backward model, usually dim_inputs + dim_states.
+    dim_outputs: int.
+        Dimension of output to dynamical model.
+        Forward model, usually dim_states.
+        Backward model, usually dim_states - dim_outputs.
     kernel: dict.
         Dictionary with kernel parameters.
     mean: dict.
@@ -135,8 +141,6 @@ def init_gps(dim_inputs: int, dim_states: int, kernel: dict = None, mean: dict =
         Dictionary with inducing points parameters.
     variational_distribution: dict.
         Dictionary with Variational Distribution parameters.
-    shared: bool, optional.
-        Flag that indicates if mean and kernel are shared (default: False).
 
     Returns
     -------
@@ -148,11 +152,10 @@ def init_gps(dim_inputs: int, dim_states: int, kernel: dict = None, mean: dict =
     inducing_points = inducing_points if inducing_points is not None else dict()
     var_d = variational_distribution if variational_distribution is not None else dict()
 
-    mean_ = _parse_mean(dim_inputs + dim_states, dim_states, **mean)
-    kernel_ = _parse_kernel(dim_states + dim_inputs, dim_states, **kernel)
-    ip, learn_ip = _parse_inducing_points(dim_states + dim_inputs, dim_states,
-                                          **inducing_points)
-    var_dist = _parse_var_dist(ip.shape[1], dim_states, **var_d)
+    mean_ = _parse_mean(dim_inputs, dim_outputs, **mean)
+    kernel_ = _parse_kernel(dim_inputs, dim_outputs, **kernel)
+    ip, learn_ip = _parse_inducing_points(dim_inputs, dim_outputs, **inducing_points)
+    var_dist = _parse_var_dist(ip.shape[1], dim_outputs, **var_d)
 
     return VariationalGP(ip, mean_, kernel_, learn_ip, var_dist)
 
