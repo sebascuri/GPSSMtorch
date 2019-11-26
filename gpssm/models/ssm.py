@@ -282,9 +282,8 @@ class SSM(nn.Module, ABC):
                      - self.loss_factors['kl_conditioning'] * kl_conditioning
                      + self.loss_factors['entropy'] * entropy
                      )
-            print("""elbo: {}, log_lik: {}, kl_cond: {}""".format(loss.item(),
-                       log_lik.item(), kl_x1.item(), kl_uf.item(), kl_ub.item(),
-                       kl_conditioning.item(), entropy.item()))
+            print("""elbo: {}, log_lik: {}, kl_cond: {}""".format(
+                loss.item(), log_lik.item(), kl_conditioning.item()))
         elif self.loss_key.lower() == 'l2':
             loss = l2
         elif self.loss_key.lower() == 'rmse':
@@ -309,21 +308,21 @@ class SSM(nn.Module, ABC):
         ################################################################################
         y = output_sequence[:, -1].expand(num_particles, -1, -1).permute(1, 2, 0)
         y_ = self.emissions(y)
-        assert y_.loc.shape == Size([batch_size, dim_outputs, num_particles])
-        assert y_.scale.shape == Size([batch_size, dim_outputs, num_particles])
+        # assert y_.loc.shape == Size([batch_size, dim_outputs, num_particles])
+        # assert y_.scale.shape == Size([batch_size, dim_outputs, num_particles])
 
         loc = torch.cat((y_.loc,
                          torch.zeros(batch_size, dim_delta, num_particles)), dim=1)
-        assert loc.shape == Size([batch_size, dim_states, num_particles])
+        # assert loc.shape == Size([batch_size, dim_states, num_particles])
 
         scale = torch.cat((y_.scale,
                            torch.ones(batch_size, dim_delta, num_particles)), dim=1)
-        assert scale.shape == Size([batch_size, dim_states, num_particles])
+        # assert scale.shape == Size([batch_size, dim_states, num_particles])
         y_tilde_d = Normal(loc, scale)
         outputs = [y_tilde_d]
 
         y_tilde = y_tilde_d.rsample()
-        assert y_tilde.shape == Size([batch_size, dim_states, num_particles])
+        # assert y_tilde.shape == Size([batch_size, dim_states, num_particles])
 
         for t in reversed(range(sequence_length - 1)):
             ############################################################################
@@ -331,13 +330,13 @@ class SSM(nn.Module, ABC):
             ############################################################################
             y = output_sequence[:, t].expand(num_particles, -1, -1).permute(1, 2, 0)
             y_ = self.emissions(y)
-            assert y_.loc.shape == Size([batch_size, dim_outputs, num_particles])
-            assert y_.scale.shape == Size([batch_size, dim_outputs, num_particles])
+            # assert y_.loc.shape == Size([batch_size, dim_outputs, num_particles])
+            # assert y_.scale.shape == Size([batch_size, dim_outputs, num_particles])
 
             # Input: Torch (batch_size x dim_inputs x num_particles)
             u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
             u = u.permute(1, 2, 0)  # Move last component to end.
-            assert u.shape == Size([batch_size, dim_inputs, num_particles])
+            # assert u.shape == Size([batch_size, dim_inputs, num_particles])
 
             # \hat{Y}: Torch (batch_size x dim_states + dim_inputs x num_particles)
 
@@ -350,21 +349,21 @@ class SSM(nn.Module, ABC):
             idx = torch.cat((torch.arange(dim_outputs, dim_states),
                              torch.arange(dim_outputs)))
             y_tilde_input = torch.cat((y_tilde[:, idx], u), dim=1)
-            assert y_tilde_input.shape == Size(
-                [batch_size, dim_inputs + dim_states, num_particles])
+            # assert y_tilde_input.shape == Size(
+            #     [batch_size, dim_inputs + dim_states, num_particles])
 
             next_y_tilde = self.backward_model(y_tilde_input)
-            assert next_y_tilde.loc.shape == Size(
-                [batch_size, dim_delta, num_particles])
-            assert next_y_tilde.covariance_matrix.shape == Size(
-                [batch_size, dim_delta, num_particles, num_particles])
+            # assert next_y_tilde.loc.shape == Size(
+            #     [batch_size, dim_delta, num_particles])
+            # assert next_y_tilde.covariance_matrix.shape == Size(
+            #     [batch_size, dim_delta, num_particles, num_particles])
 
             loc = torch.cat((y_.loc, next_y_tilde.loc), dim=1)
-            assert loc.shape == Size([batch_size, dim_states, num_particles])
+            # assert loc.shape == Size([batch_size, dim_states, num_particles])
 
             scale = torch.cat((y_.scale, torch.diagonal(next_y_tilde.covariance_matrix,
                                                         dim1=-1, dim2=-2)), dim=1)
-            assert scale.shape == Size([batch_size, dim_states, num_particles])
+            # assert scale.shape == Size([batch_size, dim_states, num_particles])
 
             q = self.transitions.diag_covariance.expand(batch_size, num_particles, -1)
             next_y_tilde_d = Normal(loc, scale + q.transpose(-1, -2))
@@ -375,7 +374,7 @@ class SSM(nn.Module, ABC):
             # state: Tensor (batch_size x dim_states x num_particles)
             y_tilde_d = next_y_tilde_d
             y_tilde = y_tilde_d.rsample()
-            assert y_tilde.shape == Size([batch_size, dim_states, num_particles])
+            # assert y_tilde.shape == Size([batch_size, dim_states, num_particles])
 
             ############################################################################
             # PREDICT Outputs #
