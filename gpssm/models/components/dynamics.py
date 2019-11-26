@@ -13,7 +13,8 @@ from gpytorch.variational import CholeskyVariationalDistribution, \
 from .variational_strategy import VariationalStrategy
 
 __author__ = 'Sebastian Curi'
-__all__ = ['GPDynamics', 'ExactGPModel', 'VariationalGP']
+__all__ = ['Dynamics', 'IdentityDynamics',
+           'GPDynamics', 'ExactGPModel', 'VariationalGP']
 
 
 # TODO: Make the dynamics a nn.Module
