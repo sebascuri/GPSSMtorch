@@ -117,8 +117,8 @@ def init_transitions(dim_states: int, variance: float = 0.01, learnable: bool = 
 
 
 def init_dynamics(dim_inputs: int, dim_outputs: int, kernel: dict = None,
-                       mean: dict = None, inducing_points: dict = None,
-                       variational_distribution: dict = None) -> VariationalGP:
+                  mean: dict = None, inducing_points: dict = None,
+                  variational_distribution: dict = None) -> VariationalGP:
     """Initialize dynamical Model.
 
     # TODO: Implement other function approximations such as NN.
