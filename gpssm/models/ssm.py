@@ -15,10 +15,10 @@ from .components.transitions import Transitions
 from .components.recognition_model import Recognition
 
 __author__ = 'Sebastian Curi'
-__all__ = ['GPSSM', 'PRSSM', 'CBFSSM']
+__all__ = ['SSM', 'PRSSM', 'CBFSSM']
 
 
-class GPSSM(nn.Module, ABC):
+class SSM(nn.Module, ABC):
     """Base class for GPSSMs inference.
 
     Parameters
@@ -262,7 +262,7 @@ class GPSSM(nn.Module, ABC):
 
                 log_lik += y_pred.log_prob(y).mean()
                 l2 += ((y_pred.loc - y) ** 2).mean()
-                entropy += y_tilde.entropy().mean()
+                entropy += y_tilde.entropy().mean() / sequence_length
 
         assert len(outputs) == sequence_length
 
@@ -282,7 +282,9 @@ class GPSSM(nn.Module, ABC):
                      - self.loss_factors['kl_conditioning'] * kl_conditioning
                      + self.loss_factors['entropy'] * entropy
                      )
-            # print(log_lik, kl_x1, kl_uf, kl_ub, kl_conditioning, entropy)
+            print("""elbo: {}, log_lik: {}, kl_cond: {}""".format(loss.item(),
+                       log_lik.item(), kl_x1.item(), kl_uf.item(), kl_ub.item(),
+                       kl_conditioning.item(), entropy.item()))
         elif self.loss_key.lower() == 'l2':
             loss = l2
         elif self.loss_key.lower() == 'rmse':
@@ -390,7 +392,7 @@ class GPSSM(nn.Module, ABC):
         raise NotImplementedError
 
 
-class PRSSM(GPSSM):
+class PRSSM(SSM):
     """Implementation of PR-SSM Algorithm."""
 
     @torch.jit.export
@@ -400,7 +402,7 @@ class PRSSM(GPSSM):
         return next_x
 
 
-class CBFSSM(GPSSM):
+class CBFSSM(SSM):
     """Conditional Backwards Forwards Algorithm."""
 
     @torch.jit.export

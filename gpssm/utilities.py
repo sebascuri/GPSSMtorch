@@ -13,7 +13,7 @@ from tqdm import tqdm
 from typing import List
 from gpssm.dataset import get_dataset, Dataset
 from gpssm.models import get_model
-from gpssm.models.gpssm_vi import GPSSM
+from gpssm.models.ssm import SSM
 from gpssm.plotters import plot_pred, plot_2d, plot_transition, plot_loss
 from collections import namedtuple
 
@@ -156,7 +156,7 @@ def approximate_with_normal(predicted_outputs: List[MultivariateNormal]) -> Norm
     return Normal(output_loc, output_cov)
 
 
-def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: int,
+def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: int,
           experiment: Experiment) -> List[float]:
     """Train a model.
 
@@ -180,7 +180,7 @@ def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs
     """
     losses = []
     for _ in tqdm(range(num_epochs)):
-        for idx, (inputs, outputs, states) in enumerate(dataloader):
+        for inputs, outputs, states in tqdm(dataloader):
             # Zero the gradients of the Optimizer
             optimizer.zero_grad()
 
@@ -204,7 +204,7 @@ def train(model: GPSSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs
     return losses
 
 
-def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
+def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
              plot_list: list = None, key: str = '') -> Evaluator:
     """Evaluate a model.
 

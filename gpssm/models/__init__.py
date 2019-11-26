@@ -1,9 +1,9 @@
-from .gpssm_vi import GPSSM, PRSSM, CBFSSM
+from .ssm import SSM, PRSSM, CBFSSM
 from .utilities import init_emissions, init_transitions, init_dynamics, init_recognition
 
 
 def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = None,
-              **kwargs) -> GPSSM:
+              **kwargs) -> SSM:
     """Get GPSSM Model."""
     dim_states = max(dim_states if dim_states is not None else dim_outputs, dim_outputs)
 

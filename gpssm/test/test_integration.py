@@ -18,5 +18,4 @@ def test_integration(method):
     configs.get('dataset', {}).pop('name', {})
     configs['name'] = config_file.split('/')[1]
 
-    main(Experiment(method, 'Actuator', 0, configs), 2)
-    assert True
+    main(Experiment(method, 'Actuator', 0, configs))
