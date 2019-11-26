@@ -14,7 +14,7 @@ evaluation:
   length: []  # Here add extra evaluation lengths.
 
 model:
-  name: ['PRSSM']  # PRSSM, CBFSSM
+  name: ['CBFSSM']  # PRSSM, CBFSSM
   dim_states: 4  #
   num_particles: 20
   loss_key: 'elbo'  # This string identifies which loss to use:

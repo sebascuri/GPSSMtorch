@@ -1,7 +1,7 @@
 """Base Class for System Id using Variational Inference with SSMs."""
 from abc import ABC, abstractmethod
 from torch import Tensor
-# from torch import Size
+from torch import Size
 import torch
 import torch.jit
 import torch.nn as nn
@@ -9,7 +9,7 @@ from torch.distributions import kl_divergence, Normal
 from typing import List
 from gpytorch.distributions import MultivariateNormal
 
-from .components.gp import VariationalGP
+from .components.dynamics import Dynamics, IdentityDynamics
 from .components.emissions import Emissions
 from .components.transitions import Transitions
 from .components.recognition_model import Recognition
@@ -48,12 +48,12 @@ class GPSSM(nn.Module, ABC):
     """
 
     def __init__(self,
-                 forward_model: VariationalGP,
+                 forward_model: Dynamics,
                  transitions: Transitions,
                  emissions: Emissions,
                  recognition_model: Recognition,
                  num_particles: int = 20,
-                 backward_model: VariationalGP = None,
+                 backward_model: Dynamics = None,
                  cubic_sampling: bool = False,
                  loss_key: str = 'elbo',
                  k_factor: float = 1.,
@@ -61,7 +61,10 @@ class GPSSM(nn.Module, ABC):
         super().__init__()
         self.dim_states = forward_model.num_outputs
         self.forward_model = forward_model
+        if backward_model is None:
+            backward_model = IdentityDynamics(self.dim_states - emissions.dim_outputs)
         self.backward_model = backward_model
+
         self.transitions = transitions
         self.emissions = emissions
 
@@ -92,7 +95,7 @@ class GPSSM(nn.Module, ABC):
     def properties(self) -> list:
         """Return list of learnable parameters."""
         return [
-            {'params': self.forward_model.parameters()},
+            {'params': self.forward_model.parameters()},  # type: ignore
             {'params': self.emissions.parameters()},
             {'params': self.transitions.parameters()},
             {'params': self.prior_recognition.parameters()},
@@ -130,7 +133,7 @@ class GPSSM(nn.Module, ABC):
             # Output: Torch (dim_outputs)
             y = output_sequence[:, t].expand(1, batch_size, dim_outputs)
             y = y.permute(1, 2, 0)
-            # assert y.shape == torch.Size([batch_size, dim_outputs, 1])
+            # assert y.shape == Size([batch_size, dim_outputs, 1])
 
             y_pred = predicted_outputs[t]
             ############################################################################
@@ -176,35 +179,25 @@ class GPSSM(nn.Module, ABC):
         ----------
         inputs: Tensor.
             output_sequence: Tensor.
-            Tensor of output data [recognition_length x dim_outputs].
+            Tensor of output data [batch_size x sequence_length x dim_outputs].
 
             input_sequence: Tensor.
-            Tensor of input data [prediction_length x dim_inputs].
+            Tensor of input data [batch_size x sequence_length x dim_inputs].
 
         Returns
         -------
-        output_distribution: List[List[MultivariateNormal].
-            List of list of distributions [prediction_length x dim_outputs x
-            batch_size x num_particles].
+        output_distribution: List[Normal].
+            List of length sequence_length of distributions of size
+            [batch_size x dim_outputs x num_particles]
         """
         output_sequence, input_sequence = inputs
         num_particles = self.num_particles
         # dim_states = self.dim_states
         batch_size, sequence_length, dim_inputs = input_sequence.shape
 
-        # Initial State: Tensor (batch_size x dim_states x num_particles)
-        if self.training:
-            state_d = self.posterior_recognition(output_sequence, input_sequence)
-        else:
-            state_d = self.prior_recognition(output_sequence, input_sequence)
-
-        state = state_d.rsample(sample_shape=torch.Size([num_particles]))
-        state = state.permute(1, 2, 0)  # Move last component to end.
-        # assert state.shape == Size([batch_size, dim_states, num_particles])
-
-        ############################################################################
+        ################################################################################
         # SAMPLE GP for cubic sampling #
-        ############################################################################
+        ################################################################################
         # if self.cubic_sampling:
         #     # TODO: Change inducing points only (and inducing variables) :).
         #     forward_model = self.forward_model.sample_gp(
@@ -213,15 +206,29 @@ class GPSSM(nn.Module, ABC):
         # else:
         #     forward_model = self.forward_model
 
-        ############################################################################
+        ################################################################################
         # PERFORM Backward Pass #
-        ############################################################################
+        ################################################################################
         if self.training:
-            output_distribution = self._backward(output_sequence)
+            output_distribution = self.backward(output_sequence, input_sequence)
 
-        ############################################################################
+        ################################################################################
+        # Initial State #
+        ################################################################################
+
+        # Initial State: Tensor (batch_size x dim_states x num_particles)
+        if self.training:
+            state_d = self.posterior_recognition(output_sequence, input_sequence)
+        else:
+            state_d = self.prior_recognition(output_sequence, input_sequence)
+
+        state = state_d.rsample(sample_shape=Size([num_particles]))
+        state = state.permute(1, 2, 0)  # Move last component to end.
+        # assert state.shape == Size([batch_size, dim_states, num_particles])
+
+        ################################################################################
         # PREDICT Outputs #
-        ############################################################################
+        ################################################################################
         outputs = []
         y_pred = self.emissions(state)
         outputs.append(y_pred)
@@ -251,8 +258,9 @@ class GPSSM(nn.Module, ABC):
 
             # next_state: Multivariate Normal (batch_size x dim_states x num_particles)
             next_state = self.transitions(next_f)
-            # assert next_f.loc.shape == Size([batch_size, dim_states, num_particles])
-            # assert next_f.covariance_matrix.shape == Size(
+            # assert next_state.loc.shape == Size(
+            #     [batch_size, dim_states, num_particles])
+            # assert next_state.covariance_matrix.shape == Size(
             #     [batch_size, dim_states, num_particles, num_particles])
             # assert (next_state.loc == next_f.loc).all()
             # assert not (next_state.covariance_matrix ==next_f.covariance_matrix).all()
@@ -290,31 +298,94 @@ class GPSSM(nn.Module, ABC):
         return outputs
 
     @torch.jit.export
-    def _backward(self, output_sequence: Tensor) -> List[Normal]:
+    def backward(self, *inputs: Tensor) -> List[Normal]:
         """Implement backwards pass."""
+        output_sequence, input_sequence = inputs
+        _, _, dim_inputs = input_sequence.shape
         batch_size, sequence_length, dim_outputs = output_sequence.shape
         dim_states = self.dim_states
         num_particles = self.num_particles
         dim_delta = dim_states - dim_outputs
 
-        outputs = []
-        for t in reversed(range(sequence_length)):
+        ################################################################################
+        # Final Pseudo Measurement #
+        ################################################################################
+        y = output_sequence[:, -1].expand(num_particles, -1, -1).permute(1, 2, 0)
+        y_ = self.emissions(y)
+        assert y_.loc.shape == Size([batch_size, dim_outputs, num_particles])
+        assert y_.scale.shape == Size([batch_size, dim_outputs, num_particles])
+
+        loc = torch.cat((y_.loc,
+                         torch.zeros(batch_size, dim_delta, num_particles)), dim=1)
+        assert loc.shape == Size([batch_size, dim_states, num_particles])
+
+        scale = torch.cat((y_.scale,
+                           torch.ones(batch_size, dim_delta, num_particles)), dim=1)
+        assert scale.shape == Size([batch_size, dim_states, num_particles])
+        y_tilde_d = Normal(loc, scale)
+        outputs = [y_tilde_d]
+
+        y_tilde = y_tilde_d.rsample()
+        assert y_tilde.shape == Size([batch_size, dim_states, num_particles])
+
+        for t in reversed(range(sequence_length - 1)):
+            ############################################################################
+            # PREDICT Previous pseudo-measurement #
+            ############################################################################
             y = output_sequence[:, t].expand(num_particles, -1, -1).permute(1, 2, 0)
             y_ = self.emissions(y)
-            # assert y_.loc.shape == Size([batch_size, dim_outputs, num_particles])
-            # assert y_.scale.shape == Size([batch_size, dim_outputs, num_particles])
+            assert y_.loc.shape == Size([batch_size, dim_outputs, num_particles])
+            assert y_.scale.shape == Size([batch_size, dim_outputs, num_particles])
 
-            loc = torch.cat((y_.loc,
-                             torch.zeros(batch_size, dim_delta, num_particles)), dim=1)
-            # assert loc.shape == torch.Size([batch_size, dim_states, num_particles])
+            # Input: Torch (batch_size x dim_inputs x num_particles)
+            u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
+            u = u.permute(1, 2, 0)  # Move last component to end.
+            assert u.shape == Size([batch_size, dim_inputs, num_particles])
 
-            cov = torch.cat((y_.scale,
-                             torch.ones(batch_size, dim_delta, num_particles)), dim=1)
-            # assert cov.shape == torch.Size([batch_size, dim_states, num_particles])
+            # \hat{Y}: Torch (batch_size x dim_states + dim_inputs x num_particles)
 
-            # TODO: IMPLEMENT BACKWARDS-PASS
-            outputs.append(Normal(loc, cov))
+            # Here change the order of y_tilde for identity dynamics (those that return
+            # the first dim_output states). The reason for this is that we already
+            # append the y_ from emissions in the first components.
+            # We can check this by comparing before computing next_y_tilde_d
+            # loc[0, :, 0], y_.loc[0, :, 0], y_tilde[0, :, 0]
 
+            idx = torch.cat((torch.arange(dim_outputs, dim_states),
+                             torch.arange(dim_outputs)))
+            y_tilde_input = torch.cat((y_tilde[:, idx], u), dim=1)
+            assert y_tilde_input.shape == Size(
+                [batch_size, dim_inputs + dim_states, num_particles])
+
+            next_y_tilde = self.backward_model(y_tilde_input)
+            assert next_y_tilde.loc.shape == Size(
+                [batch_size, dim_delta, num_particles])
+            assert next_y_tilde.covariance_matrix.shape == Size(
+                [batch_size, dim_delta, num_particles, num_particles])
+
+            loc = torch.cat((y_.loc, next_y_tilde.loc), dim=1)
+            assert loc.shape == Size([batch_size, dim_states, num_particles])
+
+            scale = torch.cat((y_.scale, torch.diagonal(next_y_tilde.covariance_matrix,
+                                                        dim1=-1, dim2=-2)), dim=1)
+            assert scale.shape == Size([batch_size, dim_states, num_particles])
+
+            q = self.transitions.diag_covariance.expand(batch_size, num_particles, -1)
+            next_y_tilde_d = Normal(loc, scale + q.transpose(-1, -2))
+            ############################################################################
+            # RESAMPLE y_tilde #
+            ############################################################################
+
+            # state: Tensor (batch_size x dim_states x num_particles)
+            y_tilde_d = next_y_tilde_d
+            y_tilde = y_tilde_d.rsample()
+            assert y_tilde.shape == Size([batch_size, dim_states, num_particles])
+
+            ############################################################################
+            # PREDICT Outputs #
+            ############################################################################
+            outputs.append(next_y_tilde_d)
+
+        assert len(outputs) == sequence_length
         return outputs[::-1]
 
     @abstractmethod

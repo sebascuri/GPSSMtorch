@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from gpssm.models.components.emissions import Emissions
 from gpssm.models.components.transitions import Transitions
-from gpssm.models.components.gp import VariationalGP
+from gpssm.models.components.dynamics import VariationalGP
 from gpssm.models.components.recognition_model import Recognition, OutputRecognition, \
     ZeroRecognition, NNRecognition, ConvRecognition, LSTMRecognition
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean

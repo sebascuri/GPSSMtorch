@@ -256,7 +256,7 @@ def evaluate(model: GPSSM, dataloader: DataLoader, experiment: Experiment,
 
             if 'transition' in plot_list:  # only implemented for 1d.
                 plot_list.remove('transition')
-                gp = model.forward_model.models[0]
+                gp = model.forward_model
                 transition = model.transitions
                 x = torch.arange(-3, 1, 0.1)
                 true_next_x = dataset.f(x.numpy())

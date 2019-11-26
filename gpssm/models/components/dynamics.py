@@ -1,8 +1,8 @@
 """Implementation of GP Models."""
 
-# import torch
+import torch
 from torch import Tensor
-from abc import ABC, abstractmethod
+from abc import ABC
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.likelihoods import Likelihood
 from gpytorch.means import Mean
@@ -13,11 +13,51 @@ from gpytorch.variational import CholeskyVariationalDistribution, \
 from .variational_strategy import VariationalStrategy
 
 __author__ = 'Sebastian Curi'
-__all__ = ['GPSSM', 'ExactGPModel', 'VariationalGP']
+__all__ = ['GPDynamics', 'ExactGPModel', 'VariationalGP']
 
 
-class GPSSM(ABC):
-    """GPSSM's are GPs defined in different outputs.
+# TODO: Make the dynamics a nn.Module
+
+class Dynamics(ABC):
+    """Dynamics Model.
+
+    A dynamical model is a function that receives a tensor (x, u) and returns a
+    distribution over the next states.
+
+    """
+
+    def __init__(self, num_outputs: int):
+        self.num_outputs = num_outputs
+
+    def __call__(self, *args: Tensor, **kwargs) -> MultivariateNormal:
+        """Call a Dynamical System at a given state-input pair."""
+        raise NotImplementedError
+
+    def kl_divergence(self) -> Tensor:
+        """Get the KL-Divergence of the Model with the Prior."""
+        return torch.tensor(0.0)
+
+
+class IdentityDynamics(Dynamics):
+    """Dynamics that returns the same state."""
+
+    def __init__(self, num_outputs: int):
+        super().__init__(num_outputs)
+
+    def __call__(self, *args: Tensor, **kwargs) -> MultivariateNormal:
+        state_input = args[0]
+        batch_size, _, num_particles = state_input.shape
+        state_input = args[0]
+        loc = state_input[:, :self.num_outputs, :]
+        scale = 1 * torch.ones(self.num_outputs).expand(batch_size, num_particles, -1
+                                                        ).transpose(-1, -2)
+        cov = torch.diag_embed(scale)
+
+        return MultivariateNormal(loc, cov)
+
+
+class GPDynamics(Dynamics):
+    """GPDynamics is a Dynamical model defined over GPs.
 
     Parameters
     ----------
@@ -28,14 +68,10 @@ class GPSSM(ABC):
         Prior kernel function of GP.
     """
 
-    def __init__(self, mean: Mean, kernel: Kernel) -> None:
+    def __init__(self, num_outputs: int, mean: Mean, kernel: Kernel) -> None:
+        super().__init__(num_outputs)
         self.mean_module = mean
         self.covar_module = kernel
-
-    @abstractmethod
-    def __call__(self, state_input: Tensor, **kwargs) -> MultivariateNormal:
-        """Call a GP-SSM at a given state-input pair."""
-        raise NotImplementedError
 
     def __str__(self) -> str:
         """Return GP parameters as a string."""
@@ -44,7 +80,7 @@ class GPSSM(ABC):
         return "\toutputscale: {}\n \tlengthscale: {}".format(outputscale, lengthscale)
 
 
-class ExactGPModel(GPSSM, ExactGP):
+class ExactGPModel(GPDynamics, ExactGP):
     """An Exact GP Model implementation.
 
     Exact GP Models require that all states are measured and the dimension of y and x
@@ -72,7 +108,7 @@ class ExactGPModel(GPSSM, ExactGP):
     Examples
     --------
     >>> import torch
-    >>> from gpssm.models.components.gp import ExactGPModel
+    >>> from gpssm.models.components.dynamics import ExactGPModel
     >>> from gpytorch.means import ConstantMean
     >>> from gpytorch.kernels import ScaleKernel, RBFKernel
     >>> from gpytorch.likelihoods import GaussianLikelihood
@@ -116,10 +152,11 @@ class ExactGPModel(GPSSM, ExactGP):
             Train outputs have to have shape [out_dim x num_points].
         """
         ExactGP.__init__(self, train_inputs, train_outputs, likelihood)
-        GPSSM.__init__(self, mean, kernel)
+        GPDynamics.__init__(self, train_outputs.shape[0], mean, kernel)
 
-    def __call__(self, state_input: Tensor, **kwargs) -> MultivariateNormal:
+    def __call__(self, *args: Tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
+        state_input = args[0]
         return ExactGP.__call__(self, state_input, **kwargs)
 
     def forward(self, state_input: Tensor) -> MultivariateNormal:
@@ -129,7 +166,7 @@ class ExactGPModel(GPSSM, ExactGP):
         return MultivariateNormal(mean_x, covar_x)
 
 
-class VariationalGP(GPSSM, AbstractVariationalGP):
+class VariationalGP(GPDynamics, AbstractVariationalGP):
     """Sparse Variational GP Class.
 
     Parameters
@@ -194,7 +231,6 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
                  kernel: Kernel,
                  learn_inducing_loc: bool = True,
                  variational_distribution: VariationalDistribution = None) -> None:
-
         if variational_distribution is None:
             batch_k, num_inducing, input_dims = inducing_points.shape
             variational_distribution = CholeskyVariationalDistribution(
@@ -205,12 +241,12 @@ class VariationalGP(GPSSM, AbstractVariationalGP):
             self, inducing_points, variational_distribution,
             learn_inducing_locations=learn_inducing_loc
         )
-        self.num_outputs = inducing_points.shape[0]
         AbstractVariationalGP.__init__(self, variational_strategy)
-        GPSSM.__init__(self, mean, kernel)
+        GPDynamics.__init__(self, inducing_points.shape[0], mean, kernel)
 
-    def __call__(self, state_input: Tensor, **kwargs) -> MultivariateNormal:
+    def __call__(self, *args: Tensor, **kwargs) -> MultivariateNormal:
         """Override call method to expand test inputs and not train inputs."""
+        state_input = args[0]
         batch_size, dim_inputs, num_particles = state_input.shape
         state_input = state_input.expand(self.num_outputs, batch_size, dim_inputs,
                                          num_particles).permute(1, 0, 3, 2)

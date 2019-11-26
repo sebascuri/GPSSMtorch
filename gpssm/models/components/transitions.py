@@ -33,6 +33,11 @@ class Transitions(nn.Module):
         """Return emission model parameters as a string."""
         return str(self.sd_noise.detach().numpy() ** 2)
 
+    @property
+    def diag_covariance(self) -> torch.Tensor:
+        """Get Diagonal Covariance Matrix."""
+        return self.sd_noise ** 2
+
     def forward(self, *args: MultivariateNormal, **kwargs) -> MultivariateNormal:
         """Compute the marginal distribution of the transmission.
 
@@ -48,7 +53,7 @@ class Transitions(nn.Module):
         """
         f_samples = args[0]
         batch_size, dim_state, num_particles = f_samples.loc.shape
-        cov = (self.sd_noise ** 2).expand(batch_size, num_particles, dim_state
+        cov = self.diag_covariance.expand(batch_size, num_particles, dim_state
                                           ).transpose(1, 2)
         return MultivariateNormal(
             f_samples.loc, f_samples.lazy_covariance_matrix.add_diag(cov).add_jitter())

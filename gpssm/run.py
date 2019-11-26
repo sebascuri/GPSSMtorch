@@ -28,8 +28,8 @@ def main(experiment: Experiment, num_threads: int = 2):
     # Optimizer Parameters
     optim_config = experiment.configs.get('optimization', {})
     batch_size = optim_config.get('batch_size', 32)
-    num_epochs = optim_config.get('num_epochs', 5)
-    learning_rate = optim_config.get('learning_rate', 0.01)
+    num_epochs = optim_config.get('num_epochs', 1)
+    learning_rate = optim_config.get('learning_rate', 0.1)
 
     # Model Parameters
     model_config = experiment.configs.get('model', {})
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     parser.add_argument('--num-threads', type=int, default=2, help='Number Threads.')
     parser.add_argument('--device', type=str, default='cpu', help='Device.')
     args = parser.parse_args()
-
+    # args.config_file = 'experiments/robomove/config.yaml'
     if args.config_file is not None:
         with open(args.config_file, 'r') as file:
             configs = yaml.load(file, Loader=yaml.SafeLoader)
