@@ -38,7 +38,7 @@ jobs:
             OMP_NUM_THREADS: 2
             MKL_NUM_THREADS: 2
           command: |
-            bash scripts/test_code.sh gpssm/dataset/test/test_datasets.py
+            bash scripts/test_code.sh gpssm/dataset/test/test_datasets.py gpssm/test/test_integration.py
 
 workflows:
   version: 2

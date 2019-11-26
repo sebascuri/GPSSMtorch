@@ -49,8 +49,8 @@ echo -e "${GREEN}Running unit tests.${NC}"
 
 if [ $# -ge 1 ]
 then
-    ignore_dir=$1
+    pytest $module --mypy --ignore=$1 --ignore=$2 || { exit 1; }
 else
-    ignore_dir=""
+    pytest $module --mypy || { exit 1; }
 fi
-pytest $module --mypy --ignore=$ignore_dir || { exit 1; }
+
