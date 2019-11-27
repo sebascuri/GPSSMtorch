@@ -240,10 +240,6 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
     >>> pred_y = likelihoods(pred_f)
     >>> ell = likelihoods.expected_log_prob(y, pred_f) / data_size
     >>> assert_allclose(ell, log_lik)
-    >>> model_i = model.sample_gp(likelihoods)
-    >>> m = model_i.eval()
-    >>> mll = ExactMarginalLogLikelihood(likelihoods, model)
-    >>> pred_f = model(x.unsqueeze(0))
     """
 
     def __init__(self, inducing_points: Tensor,
