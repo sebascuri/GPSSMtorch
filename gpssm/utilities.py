@@ -270,10 +270,11 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
                 fig.show()
                 fig.savefig('{}transition.png'.format(experiment.fig_dir))
 
-        print('Sequence Length: {}. Log-Lik: {}. RMSE: {}'.format(
+        print('Sequence Length: {}. Log-Lik: {}. NRMSE: {}. RMSE: {}'.format(
             dataset.sequence_length,
             np.array(evaluator['loglik']).mean(),
-            np.array(evaluator['rmse']).mean()
+            np.array(evaluator['rmse']).mean(),
+            np.array(evaluator['rmse']).mean() * dataset.output_normalizer.sd[0]
         ))
     return evaluator
 
