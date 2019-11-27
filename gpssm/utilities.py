@@ -98,11 +98,14 @@ _experiment = namedtuple('Experiment',
 class Experiment(_experiment):
     """Experiment Named Tuple."""
 
-    def __new__(cls, model: str, dataset: str, seed: int, configs: dict = None):
+    def __new__(cls, model: str, dataset: str, seed: int, configs: dict = None,
+                log_dir: str = None, fig_dir: str = None):
         """Create new named experiment."""
         configs = {} if configs is None else configs
-        log_dir = get_dir(model, dataset, configs.get('name', ''), fig_dir=False)
-        fig_dir = get_dir(model, dataset, configs.get('name', ''), fig_dir=True)
+        if log_dir is None:
+            log_dir = get_dir(model, dataset, configs.get('name', ''), fig_dir=False)
+        if fig_dir is None:
+            fig_dir = get_dir(model, dataset, configs.get('name', ''), fig_dir=True)
         return super(Experiment, cls).__new__(cls, model, dataset, seed, configs,
                                               log_dir, fig_dir)
 
@@ -188,7 +191,7 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
             predicted_outputs, loss = model.forward(outputs, inputs)
 
             # Back-propagate
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
 
             losses.append(loss.item())
@@ -321,12 +324,17 @@ def load(experiment: Experiment, key: str) -> list:
     files = list(filter(lambda x: key in x, os.listdir(save_dir)))
     for file_name in files:
         if key == 'model':
-            dataset = get_dataset(experiment.dataset)
-            model = get_model(experiment.model, dataset.dim_outputs,
-                              dataset.dim_inputs,
-                              **experiment.configs['model'])
-            model.load_state_dict(torch.load(file_name))
-            values.append(model)
+            if file_name[-2:] == 'pt':
+                if experiment.configs == {}:
+                    configs = load(experiment, 'experiment')[0].configs
+                else:
+                    configs = experiment.configs
+                configs.get('model', {}).pop('name', {})
+                dataset = get_dataset(experiment.dataset)
+                model = get_model(experiment.model, dataset.dim_outputs,
+                                  dataset.dim_inputs, **configs.get('model', {}))
+                model.load_state_dict(torch.load(save_dir + file_name))
+                values.append(model)
         else:
             with open(save_dir + file_name, 'rb') as file:
                 val = pickle.load(file)
