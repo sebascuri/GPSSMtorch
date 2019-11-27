@@ -5,7 +5,7 @@ from torch.distributions.kl import register_kl
 from gpytorch.distributions.distribution import Distribution
 from gpytorch.distributions.multivariate_normal import MultivariateNormal
 from gpytorch.lazy import CholLazyTensor
-from gpytorch.variational.variational_distribution import VariationalDistribution
+from gpytorch.variational import CholeskyVariationalDistribution
 
 
 class Delta(Distribution):
@@ -86,13 +86,38 @@ def kl_mvn_mvn(p_dist, q_dist):
     return q_dist.log_prob(p_dist.mean)
 
 
-class DeltaVariationalDistribution(VariationalDistribution):
+class ApproxCholeskyVariationalDistribution(CholeskyVariationalDistribution):
+    """Approximate Cholesky variational distribution.
+
+    variational_distribution: N(mean, covariance)
+    approx_variational_distribution: N(mean, covariance)
+    """
+
+    def __init__(self, num_inducing_points, batch_shape=torch.Size([]), **kwargs):
+        super().__init__(num_inducing_points, batch_shape, **kwargs)
+        self.sample = None
+
+    @property
+    def approx_variational_distribution(self):
+        """Approximate variaitonal distribution."""
+        return self.variational_distribution
+
+    def resample(self):
+        """Resample approximation."""
+        pass
+
+
+class DeltaVariationalDistribution(ApproxCholeskyVariationalDistribution):
     """Variational distribution approximated with a single particle.
 
     It is equivalent to doing MAP inference.
+
+    variational_distribution: Delta(mean)
+    approx_variational_distribution: Delta(mean)
+
     """
 
-    def __init__(self, num_inducing_points, batch_size=None,
+    def __init__(self, num_inducing_points: int, batch_size=None,
                  mean_init_std=1e-3, **kwargs):
         super().__init__(num_inducing_points=num_inducing_points,
                          batch_size=batch_size)
@@ -108,8 +133,46 @@ class DeltaVariationalDistribution(VariationalDistribution):
         """Build and return variational distribution."""
         return Delta(self.variational_mean)
 
+    @property
+    def approx_variational_distribution(self):
+        """Build and return variational distribution."""
+        return self.variational_distribution
+
     def initialize_variational_distribution(self, prior_dist):
         """Initialize variational distribution."""
         self.variational_mean.data.copy_(prior_dist.mean)
         self.variational_mean.data.add_(self.mean_init_std,
                                         torch.randn_like(prior_dist.mean))
+
+
+class CholeskySampleVariationalDistribution(ApproxCholeskyVariationalDistribution):
+    """Variational distribution approximated with a set of inducing points.
+
+    variational_distribution: N(mean, covariance)
+    approx_variational_distribution: Delta(sample from variational_distribution)
+
+    """
+
+    def resample(self):
+        """Resample approximation."""
+        self.sample = self.variational_distribution.rsample()
+
+    @property
+    def approx_variational_distribution(self):
+        """Return the variational distribution q(u) that this module represents."""
+        if self.sample is None:
+            self.resample()
+        return Delta(self.sample)
+
+
+class CholeskyMeanVariationalDistribution(ApproxCholeskyVariationalDistribution):
+    """Variational distribution approximated with a set of inducing points.
+
+    variational_distribution: N(mean, covariance)
+    approx_variational_distribution: Delta(mean)
+    """
+
+    @property
+    def approx_variational_distribution(self):
+        """Return the variational distribution q(u) that this module represents."""
+        return Delta(self.variational_distribution.loc)

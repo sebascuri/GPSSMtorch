@@ -9,9 +9,7 @@ from gpytorch.likelihoods import Likelihood
 from gpytorch.means import Mean
 from gpytorch.kernels import Kernel
 from gpytorch.models import AbstractVariationalGP, ExactGP
-from gpytorch.variational import CholeskyVariationalDistribution, \
-    VariationalDistribution
-from .variational import VariationalStrategy
+from .variational import VariationalStrategy, ApproxCholeskyVariationalDistribution
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Dynamics', 'IdentityDynamics',
@@ -246,10 +244,11 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
                  mean: Mean,
                  kernel: Kernel,
                  learn_inducing_loc: bool = True,
-                 variational_distribution: VariationalDistribution = None) -> None:
+                 variational_distribution: ApproxCholeskyVariationalDistribution = None
+                 ) -> None:
         if variational_distribution is None:
             batch_k, num_inducing, input_dims = inducing_points.shape
-            variational_distribution = CholeskyVariationalDistribution(
+            variational_distribution = ApproxCholeskyVariationalDistribution(
                 num_inducing_points=num_inducing,
                 batch_size=batch_k
             )
@@ -276,15 +275,8 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
         return MultivariateNormal(mean_x, covar_x)
 
     def resample(self):
-        """Sample an Exact GP from the variational distribution."""
-        pass
-
-        # train_xu = self.variational_strategy.inducing_points
-        # d=self.variational_strategy.variational_distribution.variational_distribution
-        # train_y = d.rsample()
-
-        # self.exact_model = ExactGPModel(train_xu, train_y, GaussianLikelihood(),
-        #                                 self.mean_module, self.covar_module)
+        """Resample the variational distribution approximation points."""
+        self.variational_strategy.resample()
 
     def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model."""

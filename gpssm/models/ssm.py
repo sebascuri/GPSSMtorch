@@ -134,8 +134,17 @@ class SSM(nn.Module, ABC):
         _, _, dim_outputs = output_sequence.shape
 
         ################################################################################
-        # SAMPLE GP for cubic sampling #
+        # SAMPLE GP #
         ################################################################################
+        try:
+            self.forward_model.resample()  # type: ignore
+        except AttributeError:
+            pass
+
+        try:
+            self.backward_model.resample()  # type: ignore
+        except AttributeError:
+            pass
 
         ################################################################################
         # PERFORM Backward Pass #

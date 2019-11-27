@@ -131,7 +131,7 @@ class VariationalStrategy(Module):
         -------
             The distribution q(f|x)
         """
-        variational_dist = self.variational_distribution.variational_distribution
+        variational_dist = self.variational_distribution.approx_variational_distribution
         inducing_points = self.inducing_points
         inducing_batch_shape = inducing_points.shape[:-2]
         if inducing_batch_shape < x.shape[:-2] or len(inducing_batch_shape) < len(
@@ -276,3 +276,7 @@ class VariationalStrategy(Module):
                 self._memoize_cache = dict()
 
         return super(VariationalStrategy, self).__call__(x)
+
+    def resample(self):
+        """Resample the variational distribution approximation points."""
+        self.variational_distribution.resample()

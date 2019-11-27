@@ -9,8 +9,10 @@ from gpssm.models.components.recognition_model import Recognition, OutputRecogni
     ZeroRecognition, NNRecognition, ConvRecognition, LSTMRecognition
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean
 from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel, LinearKernel, Kernel
-from gpytorch.variational import CholeskyVariationalDistribution
-# from .components.variational import DeltaVariationalDistribution
+from .components.variational import ApproxCholeskyVariationalDistribution, \
+    CholeskyMeanVariationalDistribution, \
+    DeltaVariationalDistribution, \
+    CholeskySampleVariationalDistribution
 from typing import Tuple
 
 __author__ = 'Sebastian Curi'
@@ -284,23 +286,30 @@ def _parse_inducing_points(dim_inputs: int, dim_outputs: int = 1,
 
 
 def _parse_var_dist(num_points: int, dim_outputs: int = 1,
+                    kind: str = 'full',
                     mean: float = None, var: float = None,
                     learn_mean: bool = True, learn_var: bool = True
-                    ) -> CholeskyVariationalDistribution:
-    var_dist = CholeskyVariationalDistribution(num_inducing_points=num_points,
-                                               batch_size=dim_outputs)
-
+                    ) -> ApproxCholeskyVariationalDistribution:
+    if kind == 'full':
+        cls = ApproxCholeskyVariationalDistribution
+    elif kind == 'sample':
+        cls = CholeskySampleVariationalDistribution
+    elif kind == 'mean':
+        cls = CholeskyMeanVariationalDistribution
+    elif kind == 'delta':
+        cls = DeltaVariationalDistribution
+    else:
+        raise NotImplementedError("Variational {} kind".format(kind))
+    var_dist = cls(num_inducing_points=num_points, batch_size=dim_outputs)
     if mean is not None:
         new_mean = mean * torch.ones(dim_outputs, num_points)
         var_dist.variational_mean.data = new_mean
     var_dist.variational_mean.requires_grad = learn_mean
 
-    if var is not None:
-        new_cov = np.sqrt(var) * torch.eye(num_points).repeat(dim_outputs, 1, 1)
-        var_dist.chol_variational_covar.data = new_cov
-    var_dist.chol_variational_covar.requires_grad = learn_var
-
-    # var_dist = DeltaVariationalDistribution(num_inducing_points=num_points,
-    #                                         batch_size=dim_outputs)
+    if kind != 'delta':
+        if var is not None:
+            new_cov = np.sqrt(var) * torch.eye(num_points).repeat(dim_outputs, 1, 1)
+            var_dist.chol_variational_covar.data = new_cov
+        var_dist.chol_variational_covar.requires_grad = learn_var
 
     return var_dist
