@@ -10,6 +10,7 @@ from gpssm.models.components.recognition_model import Recognition, OutputRecogni
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean
 from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel, LinearKernel, Kernel
 from gpytorch.variational import CholeskyVariationalDistribution
+# from .components.variational import DeltaVariationalDistribution
 from typing import Tuple
 
 __author__ = 'Sebastian Curi'
@@ -298,5 +299,8 @@ def _parse_var_dist(num_points: int, dim_outputs: int = 1,
         new_cov = np.sqrt(var) * torch.eye(num_points).repeat(dim_outputs, 1, 1)
         var_dist.chol_variational_covar.data = new_cov
     var_dist.chol_variational_covar.requires_grad = learn_var
+
+    # var_dist = DeltaVariationalDistribution(num_inducing_points=num_points,
+    #                                         batch_size=dim_outputs)
 
     return var_dist

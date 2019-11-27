@@ -11,7 +11,7 @@ from gpytorch.kernels import Kernel
 from gpytorch.models import AbstractVariationalGP, ExactGP
 from gpytorch.variational import CholeskyVariationalDistribution, \
     VariationalDistribution
-from .variational_strategy import VariationalStrategy
+from .variational import VariationalStrategy
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Dynamics', 'IdentityDynamics',
