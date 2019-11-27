@@ -261,7 +261,6 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
             self, inducing_points, variational_distribution,
             learn_inducing_locations=learn_inducing_loc
         )
-
         AbstractVariationalGP.__init__(self, variational_strategy)
         GPDynamics.__init__(self, inducing_points.shape[0], mean, kernel)
 
@@ -280,14 +279,16 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
         covar_x = self.covar_module(state_input)
         return MultivariateNormal(mean_x, covar_x)
 
-    def sample_gp(self, likelihood: Likelihood) -> ExactGPModel:
+    def resample(self):
         """Sample an Exact GP from the variational distribution."""
-        train_xu = self.variational_strategy.inducing_points
-        d = self.variational_strategy.variational_distribution.variational_distribution
-        train_y = d.rsample()  # Do not propagate the gradients?
+        pass
 
-        return ExactGPModel(train_xu, train_y, likelihood,
-                            self.mean_module, self.covar_module)
+        # train_xu = self.variational_strategy.inducing_points
+        # d=self.variational_strategy.variational_distribution.variational_distribution
+        # train_y = d.rsample()
+
+        # self.exact_model = ExactGPModel(train_xu, train_y, GaussianLikelihood(),
+        #                                 self.mean_module, self.covar_module)
 
     def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model."""

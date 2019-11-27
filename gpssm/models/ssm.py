@@ -136,13 +136,6 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # SAMPLE GP for cubic sampling #
         ################################################################################
-        # if self.cubic_sampling:
-        #     # TODO: Change inducing points only (and inducing variables) :).
-        #     forward_model = self.forward_model.sample_gp(
-        #         self.transitions.likelihoods)
-        #     forward_model.eval()
-        # else:
-        #     forward_model = self.forward_model
 
         ################################################################################
         # PERFORM Backward Pass #
