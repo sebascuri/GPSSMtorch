@@ -103,7 +103,7 @@ class SSM(nn.Module, ABC):
             {'params': self.posterior_recognition.parameters()}
         ]
 
-    def dump(self, file_name):
+    def dump(self, file_name: str) -> None:
         """Dump current model parameters to a file."""
         with open(file_name, 'w') as file:
             file.write(str(self))
