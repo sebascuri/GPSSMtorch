@@ -54,6 +54,7 @@ model:
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.
     variational_distribution:
+      kind: 'full'  # Strategies: full, mean, sample
       learn_mean: True  # Learnable parameters flag.
       mean: 0.0025  # Initial mean estimate.
       learn_var: True # Learnable parameters flag.

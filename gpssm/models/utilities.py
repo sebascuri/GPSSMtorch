@@ -9,11 +9,11 @@ from gpssm.models.components.recognition_model import Recognition, OutputRecogni
     ZeroRecognition, NNRecognition, ConvRecognition, LSTMRecognition
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean
 from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel, LinearKernel, Kernel
-from .components.variational import ApproxCholeskyVariationalDistribution, \
-    CholeskyMeanVariationalDistribution, \
-    DeltaVariationalDistribution, \
-    CholeskySampleVariationalDistribution
-from typing import Tuple
+from .components.variational import ApproxCholeskyVariationalDistribution as ACVD
+from .components.variational import CholeskyMeanVariationalDistribution as CMVD
+from .components.variational import DeltaVariationalDistribution as DVD
+from .components.variational import CholeskySampleVariationalDistribution as CSVD
+from typing import Tuple, Type
 
 __author__ = 'Sebastian Curi'
 __all__ = ['init_emissions', 'init_transitions', 'init_dynamics', 'init_recognition']
@@ -289,15 +289,15 @@ def _parse_var_dist(num_points: int, dim_outputs: int = 1,
                     kind: str = 'full',
                     mean: float = None, var: float = None,
                     learn_mean: bool = True, learn_var: bool = True
-                    ) -> ApproxCholeskyVariationalDistribution:
+                    ) -> ACVD:
     if kind == 'full':
-        cls = ApproxCholeskyVariationalDistribution
+        cls = ACVD  # type: Type[ACVD]
     elif kind == 'sample':
-        cls = CholeskySampleVariationalDistribution
+        cls = CSVD
     elif kind == 'mean':
-        cls = CholeskyMeanVariationalDistribution
+        cls = CMVD
     elif kind == 'delta':
-        cls = DeltaVariationalDistribution
+        cls = DVD
     else:
         raise NotImplementedError("Variational {} kind".format(kind))
     var_dist = cls(num_inducing_points=num_points, batch_size=dim_outputs)

@@ -43,14 +43,18 @@ do
     pydocstyle $extra || { exit 1; }
 done
 
+# Run mypy tests
+echo -e "${GREEN}Running mypy tests.${NC}"
+mypy $module || { exit 1; }
+
 
 # Run unit tests
 echo -e "${GREEN}Running unit tests.${NC}"
 
 if [ $# -ge 1 ]
 then
-    pytest $module --mypy --ignore="$1" --ignore="$2" || { exit 1; }
+    pytest $module --ignore="$1" --ignore="$2" || { exit 1; }
 else
-    pytest $module --mypy -n 4|| { exit 1; }
+    pytest $module || { exit 1; }
 fi
 
