@@ -17,7 +17,8 @@ from .plotters import plot_pred, plot_2d, plot_transition, plot_loss
 from collections import namedtuple
 
 __author__ = 'Sebastian Curi'
-__all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load']
+__all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load',
+           'make_dir']
 
 
 class Evaluator(dict):
@@ -103,24 +104,20 @@ class Experiment(_experiment):
         """Create new named experiment."""
         configs = {} if configs is None else configs
         if log_dir is None:
-            log_dir = get_dir(model, dataset, configs.get('name', ''), fig_dir=False)
+            log_dir = get_dir(configs['experiment']['name'], fig_dir=False)
         if fig_dir is None:
-            fig_dir = get_dir(model, dataset, configs.get('name', ''), fig_dir=True)
+            fig_dir = get_dir(configs['experiment']['name'], fig_dir=False)
         return super(Experiment, cls).__new__(cls, model, dataset, seed, configs,
                                               log_dir, fig_dir)
 
 
-def get_dir(model: str, dataset: str, exp_name: str, fig_dir: bool = False) -> str:
+def get_dir(exp_name: str, fig_dir: bool = False) -> str:
     """Get the log or figure directory.
 
     If the directory does not exist, create it.
 
     Parameters
     ----------
-    model: str.
-        Name of model.
-    dataset: str.
-        Name of dataset.
     exp_name:
         Name of experiment.
     fig_dir: bool, optional.
@@ -136,13 +133,17 @@ def get_dir(model: str, dataset: str, exp_name: str, fig_dir: bool = False) -> s
     else:
         base_dir = os.environ['SCRATCH']
 
-    log_directory = base_dir + '/experiments/{}/{}/{}/'.format(exp_name, dataset, model)
+    log_directory = base_dir + '/' + exp_name
+    make_dir(log_directory)
+    return log_directory
 
+
+def make_dir(name):
+    """Make a directory"""
     try:
-        os.makedirs(log_directory)
+        os.makedirs(name)
     except FileExistsError:
         pass
-    return log_directory
 
 
 def approximate_with_normal(predicted_outputs: List[MultivariateNormal]) -> Normal:

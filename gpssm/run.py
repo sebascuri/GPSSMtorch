@@ -2,9 +2,9 @@
 
 import torch
 from torch.utils.data import DataLoader
-from .dataset import get_dataset
-from .models import get_model
-from .utilities import train, evaluate, Experiment, save
+from gpssm.dataset import get_dataset
+from gpssm.models import get_model
+from gpssm.utilities import train, evaluate, Experiment, save
 
 
 def main(experiment: Experiment, num_threads: int = 2):
@@ -19,6 +19,7 @@ def main(experiment: Experiment, num_threads: int = 2):
 
     # TODO: implement device.
     """
+    print(experiment.log_dir, experiment.fig_dir)
     torch.manual_seed(experiment.seed)
     torch.set_num_threads(num_threads)
 
@@ -73,21 +74,21 @@ if __name__ == "__main__":
     import yaml
 
     parser = argparse.ArgumentParser(description='Run GP-SSM.')
-    parser.add_argument('--model', type=str, default='PRSSM', help='GPSSM Model.')
-    parser.add_argument('--dataset', type=str, default='Actuator', help='Dataset.')
     parser.add_argument('--config-file', type=str, default=None, help='Dataset.')
     parser.add_argument('--seed', type=int, default=0, help='Seed.')
     parser.add_argument('--num-threads', type=int, default=2, help='Number Threads.')
     parser.add_argument('--device', type=str, default='cpu', help='Device.')
     args = parser.parse_args()
-    # args.config_file = 'experiments/robomove/config.yaml'
+
     if args.config_file is not None:
         with open(args.config_file, 'r') as file:
             configs = yaml.load(file, Loader=yaml.SafeLoader)
-        configs.get('model', {}).pop('name', {})
-        configs.get('dataset', {}).pop('name', {})
-        configs['name'] = args.config_file.split('/')[1]
+        model = configs.get('model').pop('name')
+        dataset = configs.get('dataset').pop('name')
     else:
-        configs = {'name': '', 'model': {'dim_states': 4}}
+        configs = {'experiment': {'name': 'experiments/sample/'},
+                   'model': {'dim_states': 4}}
+        model = 'PRSSMDiag'
+        dataset = 'Actuator'
 
-    main(Experiment(args.model, args.dataset, args.seed, configs), args.num_threads)
+    main(Experiment(model, dataset, args.seed, configs), args.num_threads)
