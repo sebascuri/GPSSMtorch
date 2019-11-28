@@ -155,7 +155,8 @@ def plot_transition(state: np.ndarray, true_next_state: np.array,
                     alpha=0.2, facecolor='blue')
 
     ax.set_xlabel('state')
-    ax.set_ylabel('next_state')
+    ax.set_ylabel('next state')
+    ax.legend(loc='best')
     return fig
 
 

@@ -25,17 +25,19 @@ class Evaluator(dict):
     """Object that evaluates the predictive performance of a model."""
 
     def __init__(self):
-        self.criteria = ['loglik', 'nrmse']
+        self.criteria = ['loglik', 'nrmse', 'rmse']
         super().__init__({criterion: [] for criterion in self.criteria})
 
     def dump(self, file_name):
         """Dump evaluations to a file."""
         with open(file_name, 'w') as file:
-            file.write('Log-Lik: {}. NRMSE: {}'.format(
-                np.array(self['loglik']).mean(), np.array(self['nrmse']).mean()
+            file.write('Log-Lik: {:.4}. NRMSE: {:.4}. RMSE: {:.4} '.format(
+                np.array(self['loglik']).mean(),
+                np.array(self['nrmse']).mean(),
+                np.array(self['rmse']).mean()
             ))
 
-    def evaluate(self, predictions: Normal, true_values: Tensor) -> None:
+    def evaluate(self, predictions: Normal, true_values: Tensor, scale: Tensor) -> None:
         """Return the RMS error between the true values and the mean predictions.
 
         Parameters
@@ -51,10 +53,11 @@ class Evaluator(dict):
         log_likelihood: float.
         """
         for criterion in self.criteria:
-            self[criterion].append(getattr(self, criterion)(predictions, true_values))
+            self[criterion].append(getattr(self, criterion)(predictions, true_values,
+                                                            scale))
 
     @staticmethod
-    def loglik(predictions: Normal, true_values: Tensor) -> float:
+    def loglik(predictions: Normal, true_values: Tensor, _: Tensor = None) -> float:
         """Return the log likelihood of the true values under the predictions.
 
         Parameters
@@ -72,7 +75,7 @@ class Evaluator(dict):
         return predictions.log_prob(true_values).mean().item()
 
     @staticmethod
-    def nrmse(predictions: Normal, true_values: Tensor) -> float:
+    def nrmse(predictions: Normal, true_values: Tensor, _: Tensor = None) -> float:
         """Return the Normalized RMSE between the true values and the mean predictions.
 
         # TODO: Add rmse
@@ -91,6 +94,27 @@ class Evaluator(dict):
         l2 = (predictions.loc - true_values).pow(2).mean(dim=(1, 2))
         return l2.sqrt().mean().item()
 
+    @staticmethod
+    def rmse(predictions: Normal, true_values: Tensor, scale: Tensor = None) -> float:
+        """Return the RMSE between the true values and the mean predictions.
+
+        Parameters
+        ----------
+        predictions: MultivariateNormal.
+            A multivariate normal with loc [time x dim] and covariance (or scale)
+            [time x dim x dim] or [time x dim].
+        true_values: Tensor.
+            A tensor with shape [time x dim].
+        scale: Tensor.
+            A tensor with the scale of each of the dimensions of shape [dim].
+
+        Returns
+        -------
+        log_likelihood: float.
+        """
+        l2 = ((predictions.loc - true_values) * scale).pow(2).mean(dim=(1, 2))
+        return l2.sqrt().mean().item()
+
 
 _experiment = namedtuple('Experiment',
                          ['model', 'dataset', 'seed', 'configs', 'log_dir', 'fig_dir'])
@@ -106,7 +130,7 @@ class Experiment(_experiment):
         if log_dir is None:
             log_dir = get_dir(configs['experiment']['name'], fig_dir=False)
         if fig_dir is None:
-            fig_dir = get_dir(configs['experiment']['name'], fig_dir=False)
+            fig_dir = get_dir(configs['experiment']['name'], fig_dir=True)
         return super(Experiment, cls).__new__(cls, model, dataset, seed, configs,
                                               log_dir, fig_dir)
 
@@ -192,7 +216,7 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
             predicted_outputs, loss = model.forward(outputs, inputs)
 
             # Back-propagate
-            loss.backward(retain_graph=True)
+            loss.backward()
             optimizer.step()
 
             losses.append(loss.item())
@@ -239,7 +263,8 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
             mean = predicted_outputs.loc.detach().numpy()
             scale = predicted_outputs.scale.detach().numpy()
 
-            evaluator.evaluate(predicted_outputs, outputs)
+            evaluator.evaluate(predicted_outputs, outputs,
+                               torch.tensor(dataset.output_normalizer.sd))
 
             if 'prediction' in plot_list:
                 plot_list.remove('prediction')
@@ -257,17 +282,19 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
                 fig.show()
                 fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
 
-            if 'transition' in plot_list:  # only implemented for 1d.
+            if 'transition' in plot_list and key is 'test':
                 plot_list.remove('transition')
                 gp = model.forward_model
                 transition = model.transitions
                 x = torch.arange(-3, 1, 0.1)
                 true_next_x = dataset.f(x.numpy())
-                pred_next_x = transition(gp(x))
+                pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
 
                 fig = plot_transition(
-                    x.numpy(), true_next_x, pred_next_x.loc.numpy(),
-                    torch.diag(pred_next_x.covariance_matrix).sqrt().numpy())
+                    x.numpy(), true_next_x, pred_next_x.loc[0, 0].numpy(),
+                    torch.diag(pred_next_x.covariance_matrix[0, 0]).sqrt().numpy())
+                fig.axes[0].set_title('{} {} Learned Function'.format(
+                    experiment.model, experiment.dataset))
                 fig.show()
                 fig.savefig('{}transition.png'.format(experiment.fig_dir))
 
@@ -275,7 +302,7 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
             dataset.sequence_length,
             np.array(evaluator['loglik']).mean(),
             np.array(evaluator['nrmse']).mean(),
-            np.array(evaluator['nrmse']).mean() * dataset.output_normalizer.sd[0],
+            np.array(evaluator['rmse']).mean(),
         ))
     return evaluator
 

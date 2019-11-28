@@ -8,6 +8,8 @@ test_results.txt
 *.png
 experiments/ablation/
 experiments/small_scale/
+experiments/kink/
+experiments/sample/
 
 # IntelliJ
 .idea

@@ -19,7 +19,6 @@ def main(experiment: Experiment, num_threads: int = 2):
 
     # TODO: implement device.
     """
-    print(experiment.log_dir, experiment.fig_dir)
     torch.manual_seed(experiment.seed)
     torch.set_num_threads(num_threads)
 
