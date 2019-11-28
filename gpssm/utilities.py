@@ -24,14 +24,14 @@ class Evaluator(dict):
     """Object that evaluates the predictive performance of a model."""
 
     def __init__(self):
-        self.criteria = ['loglik', 'rmse']
+        self.criteria = ['loglik', 'nrmse']
         super().__init__({criterion: [] for criterion in self.criteria})
 
     def dump(self, file_name):
         """Dump evaluations to a file."""
         with open(file_name, 'w') as file:
-            file.write('Log-Lik: {}. RMSE: {}'.format(
-                np.array(self['loglik']).mean(), np.array(self['rmse']).mean()
+            file.write('Log-Lik: {}. NRMSE: {}'.format(
+                np.array(self['loglik']).mean(), np.array(self['nrmse']).mean()
             ))
 
     def evaluate(self, predictions: Normal, true_values: Tensor) -> None:
@@ -71,9 +71,10 @@ class Evaluator(dict):
         return predictions.log_prob(true_values).mean().item()
 
     @staticmethod
-    def rmse(predictions: Normal, true_values: Tensor) -> float:
-        """Return the RMS error between the true values and the mean predictions.
+    def nrmse(predictions: Normal, true_values: Tensor) -> float:
+        """Return the Normalized RMSE between the true values and the mean predictions.
 
+        # TODO: Add rmse
         Parameters
         ----------
         predictions: MultivariateNormal.
@@ -269,10 +270,11 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
                 fig.show()
                 fig.savefig('{}transition.png'.format(experiment.fig_dir))
 
-        print('Sequence Length: {}. Log-Lik: {}. RMSE: {}'.format(
+        print('Sequence Length: {}. LogLik: {:.4}. NRMSE: {:.4}, RMSE: {:.4}'.format(
             dataset.sequence_length,
             np.array(evaluator['loglik']).mean(),
-            np.array(evaluator['rmse']).mean()
+            np.array(evaluator['nrmse']).mean(),
+            np.array(evaluator['nrmse']).mean() * dataset.output_normalizer.sd[0],
         ))
     return evaluator
 
