@@ -1,10 +1,12 @@
+experiment:
+  name: experiments/test/
+
 dataset:
-  name: [Actuator]
   sequence_length: 20  # Length of training mini-batch sequence.
   sequence_stride: 1  # Stride of mini-batch sequence (useful for large datasets).
 
 optimization:
-  learning_rate: 0.1  # Learning rate of the optimizer (for now, Adam).
+  learning_rate: 0.05  # Learning rate of the optimizer (for now, Adam).
   batch_size: 32  # Batch size of each itertion.
   num_epochs: 1  # Number of epochs to train the data.
   curriculum: False # Flag that indicates if there is a curriculum.
@@ -14,7 +16,6 @@ evaluation:
   length: []  # Here add extra evaluation lengths.
 
 model:
-  name: ['PRSSM', 'CBFSSM', 'CBF-SSM HALF']
   dim_states: 4  #
   num_particles: 50
   loss_key: 'elbo'  # This string identifies which loss to use:
@@ -24,7 +25,7 @@ model:
     kl_ub: 1.0  # KL-divergence of the variational distribution (with prior) of the backward model factor.
     kl_x: 1.0  # KL-divergence of the output of the recognition model (with prior p(x1)) factor.
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
-    entropy: 1.0  # Entropy of the backwards model prior.
+    entropy: 0.0  # Entropy of the backwards model prior.
   recognition:
     length: 1  # Length of recognition sequence.
     kind: 'output'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
@@ -53,6 +54,7 @@ model:
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.
     variational_distribution:
+      kind: 'full'
       learn_mean: True  # Learnable parameters flag.
       mean: 0.0025  # Initial mean estimate.
       learn_var: True # Learnable parameters flag.

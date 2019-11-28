@@ -4,7 +4,7 @@ from gpssm.run import main, Experiment
 import yaml
 
 
-@pytest.fixture(params=['PRSSM', 'CBFSSM', 'CBFSSM-HALF'])
+@pytest.fixture(params=['PRSSM', 'CBFSSM', 'VCDT'])
 def method(request):
     return request.param
 

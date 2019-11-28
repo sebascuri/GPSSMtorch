@@ -121,7 +121,7 @@ def plot_2d(pred_mean: np.ndarray, pred_std: np.ndarray = None,
 
 def plot_transition(state: np.ndarray, true_next_state: np.array,
                     pred_next_state_mu: np.ndarray, pred_next_state_std: np.ndarray,
-                    sigmas: float = 1.) -> plt.Figure:
+                    sigmas: float = 3.) -> plt.Figure:
     """Plot the predicted transition function from samples.
 
     Parameters
@@ -155,7 +155,8 @@ def plot_transition(state: np.ndarray, true_next_state: np.array,
                     alpha=0.2, facecolor='blue')
 
     ax.set_xlabel('state')
-    ax.set_ylabel('next_state')
+    ax.set_ylabel('next state')
+    ax.legend(loc='best')
     return fig
 
 

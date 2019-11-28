@@ -66,10 +66,10 @@ class LeonhardRunner(AbstractRunner):
 
         for cmd in tasks:
             bsub_cmd = 'bsub '
-            bsub_cmd += '-oo {} '.format('logs/lsf.{}_{}'.format(
-                cmd.split('dataset ')[1].split(' ')[0],
-                cmd.split('model ')[1].split(' ')[0]
-            ))
+
+            config_file = cmd.split('config-file ')[1].split('/config.yaml')[0]
+            config_file = config_file.replace('/', '_')
+            bsub_cmd += '-oo {} '.format('logs/lsf.{}'.format(config_file))
 
             if self.wall_time is not None:
                 bsub_cmd += '-W {} '.format(self.wall_time)

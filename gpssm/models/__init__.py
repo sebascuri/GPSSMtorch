@@ -1,5 +1,7 @@
-from .ssm import SSM, PRSSM, CBFSSM
+from .ssm import SSM, PRSSM, PRSSMDiag, CBFSSM, CBFSSMDiag
 from .utilities import init_emissions, init_transitions, init_dynamics, init_recognition
+
+__all__ = ['SSM', 'PRSSM', 'PRSSMDiag', 'CBFSSM', 'CBFSSMDiag', 'get_model']
 
 
 def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = None,
@@ -27,15 +29,32 @@ def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = 
                      transitions=transitions, emissions=emission,
                      recognition_model=recognition,
                      **kwargs)
-    elif model_.lower() == 'cbfssm-half':
+    if model_.lower() == 'prssmdiag':
+        return PRSSMDiag(forward_model=forward_model,
+                         transitions=transitions, emissions=emission,
+                         recognition_model=recognition,
+                         **kwargs)
+    elif model_.lower() == 'vcdt' or (
+            model_.lower() == 'cbfssm' and dim_states == dim_outputs):
         return CBFSSM(forward_model=forward_model,
                       transitions=transitions, emissions=emission,
                       recognition_model=recognition,
                       **kwargs)
+    elif model_.lower() == 'vcdtdiag' or (
+            model_.lower() == 'cbfssmdiag' and dim_states == dim_outputs):
+        return CBFSSMDiag(forward_model=forward_model,
+                          transitions=transitions, emissions=emission,
+                          recognition_model=recognition,
+                          **kwargs)
     elif model_.lower() == 'cbfssm':
         return CBFSSM(forward_model=forward_model, backward_model=backward_model,
                       transitions=transitions, emissions=emission,
                       recognition_model=recognition,
                       **kwargs)
+    elif model_.lower() == 'cbfssmdiag':
+        return CBFSSMDiag(forward_model=forward_model, backward_model=backward_model,
+                          transitions=transitions, emissions=emission,
+                          recognition_model=recognition,
+                          **kwargs)
     else:
         raise NotImplementedError("{}".format(model_))

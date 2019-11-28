@@ -7,9 +7,9 @@ from .variational_distribution import ApproxCholeskyVariationalDistribution, \
 from .variational_strategy import VariationalStrategy
 
 __all__ = [
-    "VariationalStrategy",
-    "ApproxCholeskyVariationalDistribution",
-    "DeltaVariationalDistribution",
-    "CholeskySampleVariationalDistribution",
-    "CholeskyMeanVariationalDistribution"
+    'VariationalStrategy',
+    'ApproxCholeskyVariationalDistribution',
+    'DeltaVariationalDistribution',
+    'CholeskySampleVariationalDistribution',
+    'CholeskyMeanVariationalDistribution'
 ]

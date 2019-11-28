@@ -65,9 +65,9 @@ def plot_evaluation_datasets(losses: dict) -> plt.Figure:
         values.append(losses[dataset])
 
     fig, ax = plt.subplots()
-    width = 0.35  # the width of the bars
+    width = 0.3  # the width of the bars
     for idx, criterion in enumerate(criteria):
-        ax.bar(x + (idx - 1 / 2) * width,
+        ax.bar(x + (idx - 1) * width,
                list(a[criterion][0] for a in values),
                width,
                yerr=list(a[criterion][1] for a in values),

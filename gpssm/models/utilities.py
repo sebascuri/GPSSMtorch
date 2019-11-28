@@ -2,17 +2,14 @@
 
 import torch
 import numpy as np
-from gpssm.models.components.emissions import Emissions
-from gpssm.models.components.transitions import Transitions
-from gpssm.models.components.dynamics import VariationalGP
-from gpssm.models.components.recognition_model import Recognition, OutputRecognition, \
-    ZeroRecognition, NNRecognition, ConvRecognition, LSTMRecognition
+from .components import Emissions, Transitions, VariationalGP, Recognition, \
+    OutputRecognition, ZeroRecognition, NNRecognition, ConvRecognition, LSTMRecognition
+from .components.variational import ApproxCholeskyVariationalDistribution as AppCholVaDi
+from .components.variational import CholeskyMeanVariationalDistribution as CholMeanVaDi
+from .components.variational import DeltaVariationalDistribution as DeltaVaDi
+from .components.variational import CholeskySampleVariationalDistribution as CholSamVaDi
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean
 from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel, LinearKernel, Kernel
-from .components.variational import ApproxCholeskyVariationalDistribution as ACVD
-from .components.variational import CholeskyMeanVariationalDistribution as CMVD
-from .components.variational import DeltaVariationalDistribution as DVD
-from .components.variational import CholeskySampleVariationalDistribution as CSVD
 from typing import Tuple, Type
 
 __author__ = 'Sebastian Curi'
@@ -200,15 +197,15 @@ def _parse_kernel(input_size: int, dim_outputs: int = 1, shared: bool = False,
         kernel = ScaleKernel(RBFKernel(ard_num_dims=ard_num_dims,
                                        batch_size=batch_size),
                              batch_size=batch_size)
-    elif kind.lower() == 'matern 1/2':
+    elif kind.lower() == 'matern12':
         kernel = ScaleKernel(MaternKernel(nu=0.5, ard_num_dims=ard_num_dims,
                                           batch_size=batch_size),
                              batch_size=batch_size)
-    elif kind.lower() == 'matern 3/2':
+    elif kind.lower() == 'matern32':
         kernel = ScaleKernel(MaternKernel(nu=1.5, ard_num_dims=ard_num_dims,
                                           batch_size=batch_size),
                              batch_size=batch_size)
-    elif kind.lower() == 'matern 5/2':
+    elif kind.lower() == 'matern52':
         kernel = ScaleKernel(MaternKernel(nu=2.5, ard_num_dims=ard_num_dims,
                                           batch_size=batch_size),
                              batch_size=batch_size)
@@ -289,15 +286,15 @@ def _parse_var_dist(num_points: int, dim_outputs: int = 1,
                     kind: str = 'full',
                     mean: float = None, var: float = None,
                     learn_mean: bool = True, learn_var: bool = True
-                    ) -> ACVD:
+                    ) -> AppCholVaDi:
     if kind == 'full':
-        cls = ACVD  # type: Type[ACVD]
+        cls = AppCholVaDi  # type: Type[AppCholVaDi]
     elif kind == 'sample':
-        cls = CSVD
+        cls = CholSamVaDi
     elif kind == 'mean':
-        cls = CMVD
+        cls = CholMeanVaDi
     elif kind == 'delta':
-        cls = DVD
+        cls = DeltaVaDi
     else:
         raise NotImplementedError("Variational {} kind".format(kind))
     var_dist = cls(num_inducing_points=num_points, batch_size=dim_outputs)
