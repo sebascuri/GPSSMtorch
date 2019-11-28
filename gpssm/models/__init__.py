@@ -1,6 +1,8 @@
 from .ssm import SSM, PRSSM, CBFSSM
 from .utilities import init_emissions, init_transitions, init_dynamics, init_recognition
 
+__all__ = ['SSM', 'PRSSM', 'CBFSSM', 'get_model']
+
 
 def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = None,
               **kwargs) -> SSM:

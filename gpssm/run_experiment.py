@@ -1,5 +1,5 @@
 """Run an Experiment from a config file."""
-from gpssm.runner import init_runner
+from .runner import init_runner
 import argparse
 from itertools import product
 import sys

@@ -2,9 +2,9 @@
 
 import torch
 from torch.utils.data import DataLoader
-from gpssm.dataset import get_dataset
-from gpssm.models import get_model
-from gpssm.utilities import train, evaluate, Experiment, save
+from .dataset import get_dataset
+from .models import get_model
+from .utilities import train, evaluate, Experiment, save
 
 
 def main(experiment: Experiment, num_threads: int = 2):

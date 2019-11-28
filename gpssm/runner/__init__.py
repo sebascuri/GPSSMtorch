@@ -1,6 +1,8 @@
 from .utilities import is_leonhard
 from .runners import AbstractRunner, LeonhardRunner, SingleRunner
 
+__all__ = ['AbstractRunner', 'LeonhardRunner', 'SingleRunner', 'init_runner']
+
 
 def init_runner(num_threads: int = 1, use_gpu: bool = False,
                 wall_time: int = None, memory: int = None) -> AbstractRunner:

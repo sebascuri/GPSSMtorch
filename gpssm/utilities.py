@@ -11,10 +11,9 @@ import gpytorch
 from gpytorch.distributions import MultivariateNormal
 from tqdm import tqdm
 from typing import List
-from gpssm.dataset import get_dataset, Dataset
-from gpssm.models import get_model
-from gpssm.models.ssm import SSM
-from gpssm.plotters import plot_pred, plot_2d, plot_transition, plot_loss
+from .dataset import get_dataset, Dataset
+from .models import get_model, SSM
+from .plotters import plot_pred, plot_2d, plot_transition, plot_loss
 from collections import namedtuple
 
 __author__ = 'Sebastian Curi'

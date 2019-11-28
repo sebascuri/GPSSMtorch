@@ -2,8 +2,8 @@
 import argparse
 from itertools import product
 import yaml
-from gpssm.dataset import get_dataset
-from gpssm.utilities import Experiment, load
+from .dataset import get_dataset
+from .utilities import Experiment, load
 import numpy as np
 
 
