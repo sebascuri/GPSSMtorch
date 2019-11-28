@@ -163,7 +163,7 @@ def get_dir(exp_name: str, fig_dir: bool = False) -> str:
 
 
 def make_dir(name):
-    """Make a directory"""
+    """Make a directory."""
     try:
         os.makedirs(name)
     except FileExistsError:
@@ -282,7 +282,7 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
                 fig.show()
                 fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
 
-            if 'transition' in plot_list and key is 'test':
+            if 'transition' in plot_list and key == 'test':
                 plot_list.remove('transition')
                 gp = model.forward_model
                 transition = model.transitions

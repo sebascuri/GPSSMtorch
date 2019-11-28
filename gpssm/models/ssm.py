@@ -506,4 +506,3 @@ class CBFSSMDiag(SSM):
 
         cov = torch.diag_embed(gain.pow(2) * sigma_y + neg_gain.pow(2) * sigma_f)
         return MultivariateNormal(loc, cov)
-
