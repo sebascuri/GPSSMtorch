@@ -15,7 +15,7 @@ from .components.transitions import Transitions
 from .components.recognition_model import Recognition
 
 __author__ = 'Sebastian Curi'
-__all__ = ['SSM', 'PRSSM', 'CBFSSM']
+__all__ = ['SSM', 'PRSSM', 'PRSSMDiag', 'CBFSSM', 'CBFSSMDiag']
 
 
 class SSM(nn.Module, ABC):
@@ -403,6 +403,17 @@ class PRSSM(SSM):
         return next_x
 
 
+class PRSSMDiag(SSM):
+    """Implementation of PR-SSM Algorithm."""
+
+    @torch.jit.export
+    def _condition(self, next_x: MultivariateNormal, next_y: Normal
+                   ) -> MultivariateNormal:
+        """Implement conditioning."""
+        sigma_f = torch.diagonal(next_x.covariance_matrix, dim1=-1, dim2=-2)
+        return MultivariateNormal(next_x.loc, torch.diag_embed(sigma_f))
+
+
 class CBFSSM(SSM):
     """Conditional Backwards Forwards Algorithm."""
 
@@ -412,7 +423,7 @@ class CBFSSM(SSM):
         """Condition the next_x distribution with the measurements of next_y.
 
         Next_x is a Multivariate Normal and the covariance matrix is between particles.
-        However, between the x-coordinates is independent.
+        However, between the x-coordinates are independent.
 
         Next_y is a Normal distribution (diagonal Multivariate Normal) with the same
         dimensionality as next_x.
@@ -447,3 +458,51 @@ class CBFSSM(SSM):
         cov = torch.diag_embed(gain.pow(2) * sigma_y)
         cov += neg_gain.transpose(-2, -1) @ next_x.covariance_matrix @ neg_gain
         return MultivariateNormal(loc, cov)
+
+
+class CBFSSMDiag(SSM):
+    """Conditional Backwards Forwards Algorithm with Diagonal Posterior Covariance."""
+
+    @torch.jit.export
+    def _condition(self, next_x: MultivariateNormal, next_y: Normal
+                   ) -> MultivariateNormal:
+        """Condition the next_x distribution with the measurements of next_y.
+
+        Next_x is a Multivariate Normal and the covariance matrix is between particles.
+        However, between the x-coordinates are independent.
+
+        In this implementation we omit the covariance between the particles.
+
+        Next_y is a Normal distribution (diagonal Multivariate Normal) with the same
+        dimensionality as next_x.
+
+        In this case, the Kalman Filtering reduces to 1-D, where the gain is just:
+        k = sigma_x / (sigma_x + sigma_y).
+        The location of each particle is updated by k times the error.
+        The covariance is the prior covariance scaled by 1 - k.
+
+        Parameters
+        ----------
+        next_x: MultivariateNormal.
+            Covariance batch_size x state_dim x num_particles x num_particles.
+        next_y: Normal.
+            Scale batch_size x state_dim x num_particles.
+
+        Returns
+        -------
+        next_x: MultivariateNormal.
+            Covariance batch_size x state_dim x num_particles x num_particles.
+        """
+        error = next_x.loc - next_y.loc
+
+        sigma_f = torch.diagonal(next_x.covariance_matrix, dim1=-1, dim2=-2)
+        sigma_y = next_y.scale + (self.k_factor - 1) * sigma_f
+
+        gain = sigma_f / (sigma_f + sigma_y)
+        neg_gain = (1 - gain)
+
+        loc = next_x.loc + gain * error
+
+        cov = torch.diag_embed(gain.pow(2) * sigma_y + neg_gain.pow(2) * sigma_f)
+        return MultivariateNormal(loc, cov)
+
