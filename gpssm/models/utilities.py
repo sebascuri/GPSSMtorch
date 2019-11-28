@@ -197,15 +197,15 @@ def _parse_kernel(input_size: int, dim_outputs: int = 1, shared: bool = False,
         kernel = ScaleKernel(RBFKernel(ard_num_dims=ard_num_dims,
                                        batch_size=batch_size),
                              batch_size=batch_size)
-    elif kind.lower() == 'matern 1/2':
+    elif kind.lower() == 'matern12':
         kernel = ScaleKernel(MaternKernel(nu=0.5, ard_num_dims=ard_num_dims,
                                           batch_size=batch_size),
                              batch_size=batch_size)
-    elif kind.lower() == 'matern 3/2':
+    elif kind.lower() == 'matern32':
         kernel = ScaleKernel(MaternKernel(nu=1.5, ard_num_dims=ard_num_dims,
                                           batch_size=batch_size),
                              batch_size=batch_size)
-    elif kind.lower() == 'matern 5/2':
+    elif kind.lower() == 'matern52':
         kernel = ScaleKernel(MaternKernel(nu=2.5, ard_num_dims=ard_num_dims,
                                           batch_size=batch_size),
                              batch_size=batch_size)
