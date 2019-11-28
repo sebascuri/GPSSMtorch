@@ -6,6 +6,7 @@ train_results.txt
 test_results.txt
 *.pt
 *.png
+experiments/ablation/
 experiments/small_scale/
 
 # IntelliJ

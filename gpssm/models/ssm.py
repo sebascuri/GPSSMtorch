@@ -185,12 +185,12 @@ class SSM(nn.Module, ABC):
         kl_conditioning = torch.tensor(0.)
         entropy = torch.tensor(0.)
         if self.training:
-            y_pred = output_distribution[0]
+            y_tilde = output_distribution[0]
             y = output_sequence[:, 0].expand(1, batch_size, dim_outputs
                                              ).permute(1, 2, 0)
             log_lik += y_pred.log_prob(y).mean()
             l2 += ((y_pred.loc - y) ** 2).mean()
-            entropy += y_pred.entropy().mean()
+            entropy += y_tilde.entropy().mean() / sequence_length
 
         for t in range(sequence_length - 1):
             ############################################################################
@@ -284,8 +284,9 @@ class SSM(nn.Module, ABC):
                      - self.loss_factors['kl_conditioning'] * kl_conditioning
                      + self.loss_factors['entropy'] * entropy
                      )
-            print("""elbo: {}, log_lik: {}, kl_cond: {}""".format(
-                loss.item(), log_lik.item(), kl_conditioning.item()))
+            print('elbo: {}, log_lik: {}, kl_cond: {}, kl_u: {}, entropy: {}'.format(
+                loss.item(), log_lik.item(), kl_conditioning.item(), kl_uf.item(),
+                entropy.item()))
         elif self.loss_key.lower() == 'l2':
             loss = l2
         elif self.loss_key.lower() == 'rmse':
