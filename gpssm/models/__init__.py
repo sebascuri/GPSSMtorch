@@ -34,21 +34,23 @@ def get_model(model_: str, dim_outputs: int, dim_inputs: int, dim_states: int = 
                          transitions=transitions, emissions=emission,
                          recognition_model=recognition,
                          **kwargs)
-    elif model_.lower() == 'cbfssm-half':
+    elif model_.lower() == 'vcdt' or (
+            model_.lower() == 'cbfssm' and dim_states == dim_outputs):
         return CBFSSM(forward_model=forward_model,
                       transitions=transitions, emissions=emission,
                       recognition_model=recognition,
                       **kwargs)
+    elif model_.lower() == 'vcdtdiag' or (
+            model_.lower() == 'cbfssmdiag' and dim_states == dim_outputs):
+        return CBFSSMDiag(forward_model=forward_model,
+                          transitions=transitions, emissions=emission,
+                          recognition_model=recognition,
+                          **kwargs)
     elif model_.lower() == 'cbfssm':
         return CBFSSM(forward_model=forward_model, backward_model=backward_model,
                       transitions=transitions, emissions=emission,
                       recognition_model=recognition,
                       **kwargs)
-    elif model_.lower() == 'cbfssmdiag-half':
-        return CBFSSMDiag(forward_model=forward_model,
-                          transitions=transitions, emissions=emission,
-                          recognition_model=recognition,
-                          **kwargs)
     elif model_.lower() == 'cbfssmdiag':
         return CBFSSMDiag(forward_model=forward_model, backward_model=backward_model,
                           transitions=transitions, emissions=emission,

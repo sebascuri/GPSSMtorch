@@ -1,3 +1,7 @@
+experiment:
+  name: small_scale
+  splits: [['dataset', 'name'], ['model', 'name']]
+
 dataset:
   name: [Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace, Tank]
   sequence_length: 50  # Length of training mini-batch sequence.
@@ -14,7 +18,7 @@ evaluation:
   length: []  # Here add extra evaluation lengths.
 
 model:
-  name: ['PRSSM', 'CBFSSM']  # PRSSM, CBFSSM
+  name: ['PRSSM', 'CBFSSM', 'VCDT']
   dim_states: 4  #
   num_particles: 50
   loss_key: 'elbo'  # This string identifies which loss to use:
@@ -25,7 +29,7 @@ model:
     kl_ub: 1.0  # KL-divergence of the variational distribution (with prior) of the backward model factor.
     kl_x: 1.0  # KL-divergence of the output of the recognition model (with prior p(x1)) factor.
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
-    entropy: 1.0  # Entropy of the backwards model predictions.
+    entropy: 0.0  # Entropy of the backwards model predictions.
   recognition:
     length: 1  # Length of recognition sequence.
     kind: 'output'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
@@ -41,7 +45,7 @@ model:
     mean:
       kind: 'zero'  # Strategies: zero, constant, linear.
     kernel:
-      shared: False  # Shared parameters between components flag.
+      shared: True  # Shared parameters between components flag.
       kind: 'rbf'  # Strategies: rbf, matern 1/2, matern 3/2, matern 5/2, linear
       ard_num_dims:  # Number of ard dimensions. if empty will automatically select dim_states + dim_inputs.
       outputscale: 0.25  # Initial variance estimate.
@@ -54,7 +58,7 @@ model:
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.
     variational_distribution:
-      kind: 'full'  # Strategies: full, mean, sample
+      kind: 'full'  # Strategies: full, mean, sample, delta
       learn_mean: True  # Learnable parameters flag.
       mean: 0.0025  # Initial mean estimate.
       learn_var: True # Learnable parameters flag.
