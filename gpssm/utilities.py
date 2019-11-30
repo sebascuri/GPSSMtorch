@@ -15,6 +15,8 @@ from .dataset import get_dataset, Dataset
 from .models import get_model, SSM
 from .plotters import plot_pred, plot_2d, plot_transition, plot_loss
 from collections import namedtuple
+import gc
+
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load',
@@ -218,7 +220,8 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
             # Back-propagate
             loss.backward()
             optimizer.step()
-
+            gc.collect()
+            del inputs, outputs, states
             losses.append(loss.item())
 
         print(model)
@@ -264,7 +267,7 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
             scale = predicted_outputs.scale.detach().numpy()
 
             evaluator.evaluate(predicted_outputs, outputs,
-                               torch.tensor(dataset.output_normalizer.sd))
+                               torch.tensor(dataset.output_normalizer.sd).float())
 
             if 'prediction' in plot_list:
                 plot_list.remove('prediction')
