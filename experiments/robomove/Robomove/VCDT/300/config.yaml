@@ -1,0 +1,59 @@
+dataset:
+  name: Robomove
+  sequence_length: 300
+  sequence_stride: 50
+experiment:
+  name: experiments/robomove/Robomove/VCDT/300/
+model:
+  dim_states: 4
+  emissions:
+    learnable: true
+    variance: 1.0
+  forward:
+    inducing_points:
+      learnable: true
+      number_points: 100
+      scale: 4.0
+      strategy: uniform
+    kernel:
+      ard_num_dims: null
+      kind: rbf
+      learn_lengthscale: true
+      learn_outputscale: true
+      lengthscale: 1.0
+      outputscale: 0.01
+      shared: true
+    mean:
+      kind: zero
+    variational_distribution:
+      learn_mean: true
+      learn_var: true
+      mean: 0.001
+      var: 0.0001
+  k_factor: 1.0
+  loss_factors:
+    entropy: 0.0
+    kl_conditioning: 1.0
+    kl_ub: 1.0
+    kl_uf: 1.0
+    kl_x: 0
+    loglik: 20.0
+  loss_key: elbo
+  name: VCDT
+  num_particles: 50
+  recognition:
+    kind: bi-lstm
+    learnable: true
+    length: 50
+    variance: 0.1
+  transitions:
+    learnable: true
+    variance: 0.001
+optimization:
+  batch_size: 32
+  curriculum: false
+  learning_rate: 0.01
+  num_epochs: 50
+plots:
+- training_loss
+- prediction
