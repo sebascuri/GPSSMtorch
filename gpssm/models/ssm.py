@@ -161,7 +161,7 @@ class SSM(nn.Module, ABC):
 
         # Initial State: Tensor (batch_size x dim_states x num_particles)
 
-        if self.training:
+        if self.training or self.loss_factors['kl_x'] < 1e-6:
             state_d = q_x1
         else:
             state_d = p_x1
@@ -175,7 +175,7 @@ class SSM(nn.Module, ABC):
         ################################################################################
         outputs = []
         y_pred = self.emissions(state)
-        outputs.append(y_pred)
+        outputs.append(Normal(y_pred.loc.detach(), y_pred.scale.detach()))
 
         ################################################################################
         # INITIALIZE losses #
@@ -185,7 +185,7 @@ class SSM(nn.Module, ABC):
         kl_conditioning = torch.tensor(0.)
         entropy = torch.tensor(0.)
         if self.training:
-            y_tilde = output_distribution[0]
+            y_tilde = output_distribution.pop(0)
             y = output_sequence[:, 0].expand(1, batch_size, dim_outputs
                                              ).permute(1, 2, 0)
             log_lik += y_pred.log_prob(y).mean()
@@ -235,8 +235,9 @@ class SSM(nn.Module, ABC):
             # CONDITION Next State #
             ############################################################################
             if self.training:
+                y_tilde = output_distribution.pop(0)
                 p_next_state = next_state
-                next_state = self._condition(next_state, output_distribution[t + 1])
+                next_state = self._condition(next_state, y_tilde)
                 kl_conditioning += kl_divergence(next_state, p_next_state).mean()
 
             ############################################################################
@@ -252,13 +253,13 @@ class SSM(nn.Module, ABC):
             # PREDICT Outputs #
             ############################################################################
             y_pred = self.emissions(state)
-            outputs.append(y_pred)
+            outputs.append(Normal(y_pred.loc.detach(), y_pred.scale.detach()))
 
             ############################################################################
             # COMPUTE Losses #
             ############################################################################
             if self.training:
-                y_tilde = output_distribution[t + 1]
+
                 y = output_sequence[:, t + 1].expand(
                     num_particles, batch_size, dim_outputs).permute(1, 2, 0)
 
@@ -268,6 +269,8 @@ class SSM(nn.Module, ABC):
 
         assert len(outputs) == sequence_length
 
+        if self.training:
+            del output_distribution
         ################################################################################
         # Compute model KL divergences Divergences #
         ################################################################################
@@ -284,9 +287,9 @@ class SSM(nn.Module, ABC):
                      - self.loss_factors['kl_conditioning'] * kl_conditioning
                      + self.loss_factors['entropy'] * entropy
                      )
-            print('elbo: {}, log_lik: {}, kl_cond: {}, kl_u: {}, entropy: {}'.format(
-                loss.item(), log_lik.item(), kl_conditioning.item(), kl_uf.item(),
-                entropy.item()))
+            str = 'elbo: {}, log_lik: {}, klx: {}, kluf: {}, klub: {}, klcond: {}, s:{}'
+            print(str.format(loss.item(), log_lik.item(), kl_x1.item(), kl_uf.item(),
+                             kl_ub.item(), kl_conditioning.item(), entropy.item()))
         elif self.loss_key.lower() == 'l2':
             loss = l2
         elif self.loss_key.lower() == 'rmse':
