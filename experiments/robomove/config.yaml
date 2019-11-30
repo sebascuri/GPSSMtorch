@@ -1,16 +1,16 @@
 experiment:
   name: robomove
-  splits: [['dataset', 'name'], ['model', 'name']]
+  splits: [['dataset', 'name'], ['model', 'name'], ['dataset', 'sequence_length']]
 
 dataset:
-  name: [RobomoveSimple, Robomove]
-  sequence_length: 50
+  name: [RobomoveSimple]
+  sequence_length: [50, 100, 300]
   sequence_stride: 50
 
 optimization:
   learning_rate: 0.01
   batch_size: 32
-  num_epochs: 5
+  num_epochs: 50
   curriculum: False
 
 plots: ['training_loss', 'prediction']
@@ -25,12 +25,12 @@ model:
     loglik: 20.0 # Log-likelihood factor.
     kl_uf: 1.0  # KL-divergence of the variational distribution (with prior) of the forward model factor.
     kl_ub: 1.0  # KL-divergence of the variational distribution (with prior) of the backward model factor.
-    kl_x: 1.0  # KL-divergence of the output of the recognition model (with prior p(x1)) factor.
+    kl_x: 0  # KL-divergence of the output of the recognition model (with prior p(x1)) factor.
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
     entropy: 0.0  # Entropy of the backwards model predictions.
   recognition:
-    length: 50
-    kind: 'bi-lstm'
+    length: 1
+    kind: 'output'
     variance: 0.1
     learnable: True
   emissions:
