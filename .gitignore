@@ -2,8 +2,7 @@ data/
 *.obj
 model_final.txt
 model_initial.txt
-train_results.txt
-test_results.txt
+*results.txt
 *.pt
 *.png
 Actuator/

@@ -9,7 +9,11 @@ optimization:
   learning_rate: 0.05  # Learning rate of the optimizer (for now, Adam).
   batch_size: 32  # Batch size of each itertion.
   num_epochs: 1  # Number of epochs to train the data.
+  eval_length: # Evaluation lengths.
+      -
+      - 20
   curriculum: False # Flag that indicates if there is a curriculum.
+
 
 evaluation:
   plots: ['training_loss', 'prediction']

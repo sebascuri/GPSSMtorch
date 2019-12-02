@@ -16,6 +16,5 @@ def test_integration(method):
         configs = yaml.load(file, Loader=yaml.SafeLoader)
     configs.get('model', {}).pop('name', {})
     configs.get('dataset', {}).pop('name', {})
-    configs['name'] = config_file.split('/')[1]
-
+    configs['experiment']['name'] += method + '/'
     main(Experiment(method, 'Actuator', 0, configs))
