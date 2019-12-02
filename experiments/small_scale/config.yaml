@@ -1,6 +1,6 @@
 experiment:
-  name: small_scale
-  splits: [['dataset', 'name'], ['model', 'name']]
+  name: small_scale  # Experiment name.
+  splits: [['dataset', 'name'], ['model', 'name']]  # These are all the different experiments runner will parse.
 
 dataset:
   name: [Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace, Tank]
@@ -9,7 +9,7 @@ dataset:
 
 optimization:
   learning_rate: 0.05  # Learning rate of the optimizer (for now, Adam).
-  batch_size: 32  # Batch size of each itertion.
+  batch_size: 32  # Batch size of each iteration.
   num_epochs: 50  # Number of epochs to train the data.
   curriculum: False # Flag that indicates if there is a curriculum.
 
@@ -19,9 +19,9 @@ evaluation:
 
 model:
   name: ['PRSSM', 'CBFSSM', 'VCDT']
-  dim_states: 4  #
-  num_particles: 50
-  loss_key: 'elbo'  # This string identifies which loss to use:
+  dim_states: 4  # Number of internal states.
+  num_particles: 50  # Number of particles for forwards/backwards sampling.
+  loss_key: 'elbo'  # This string identifies which loss to use.
   k_factor: 1.0  # This is the soft conditioning factor.
   loss_factors:  # These factors multiply each term of the ELBO.
     loglik: 1.0 # Log-likelihood factor.
@@ -41,7 +41,7 @@ model:
   transitions:
     variance: 0.0002  # Initial variance estimate.
     learnable: True  # Learnable parameters flag.
-  forward:
+  forward:  # If backwards is empty, it will make a copy of the same GP for the backwards pass.
     mean:
       kind: 'zero'  # Strategies: zero, constant, linear.
     kernel:
