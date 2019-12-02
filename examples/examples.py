@@ -1,38 +1,26 @@
 """Python Script Template."""
-from gpssm.utilities import Experiment, load
-from gpssm.models.ssm import SSM
-from gpssm.models.components.dynamics import ExactGPModel
-import torch
-from gpytorch.likelihoods import GaussianLikelihood
-import gpytorch
 import matplotlib.pyplot as plt
+import torch
+from gpssm.utilities import Experiment, load
+from gpssm.models import SSM, get_model
+from gpssm.dataset import get_dataset
+from gpssm.utilities import approximate_with_normal
+from gpssm.plotters import plot_2d
+
+dim_states = 4
+dataset = get_dataset('robomovesimple')
+model = get_model('prssm', dim_states=dim_states,
+                  dim_inputs=dataset.dim_inputs, dim_outputs=dataset.dim_outputs)
+train_set = dataset(train=True, sequence_length=300, sequence_stride=1)
+test_set = dataset(train=False, sequence_length=300, sequence_stride=1)
 
 
-model = load(Experiment('PRSSM', 'Actuator', 0), 'model')[0]  # type: SSM
-gp = model.forward_model
-# print(model)
+with torch.no_grad():
+    inputs, outputs, states = train_set[0]
+    pred_outputs, _ = model.forward(outputs.unsqueeze(0), inputs.unsqueeze(0))
 
-gp.eval()
-state_input = torch.randn(1, 5, 20)
-var_gp_loc = gp(state_input).loc
+    pred_outputs = approximate_with_normal(pred_outputs)
+    mean = pred_outputs.loc.detach().numpy()
 
-
-ip = gp.variational_strategy.inducing_points
-
-var_dist = gp.variational_strategy.variational_distribution.variational_distribution
-mu = var_dist.loc
-sample = var_dist.rsample()
-
-with gpytorch.settings.debug(False):
-    gp_s = ExactGPModel(ip, mu, GaussianLikelihood(), gp.mean_module, gp.covar_module)
-
-    state_input = state_input.expand(4, 1, 5, 20).permute(1, 0, 3, 2)
-    print(ip.shape)
-    print(state_input.shape)
-    sample_gp_loc = gp_s(state_input).loc
-
-    plt.plot(ip[0, :, 0].detach().numpy(),
-             var_gp_loc[0, 0].detach().numpy(), '*')
-    plt.plot(ip[0, :, 0].detach().numpy(),
-             sample_gp_loc[0, 0].detach().numpy(), '*')
-    plt.show()
+    fig = plot_2d(mean[0].T, true_outputs=outputs.numpy().T)
+    fig.show()

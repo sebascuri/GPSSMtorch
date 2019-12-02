@@ -271,7 +271,7 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
 
             if 'prediction' in plot_list:
                 plot_list.remove('prediction')
-                fig = plot_pred(mean[0].T, np.sqrt(scale[0]).T, outputs[0].numpy().T)
+                fig = plot_pred(mean[-1].T, np.sqrt(scale[-1]).T, outputs[-1].numpy().T)
                 fig.axes[0].set_title('{} {} {} Prediction'.format(
                     experiment.model, experiment.dataset, key.capitalize()))
                 fig.show()
@@ -279,7 +279,7 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
 
             if '2d' in plot_list:
                 plot_list.remove('2d')
-                fig = plot_2d(mean[0].T, outputs[0].numpy().T)
+                fig = plot_2d(mean[-1].T, outputs[-1].numpy().T)
                 fig.axes[0].set_title('{} {} {} Prediction'.format(
                     experiment.model, experiment.dataset, key.capitalize()))
                 fig.show()
@@ -294,8 +294,8 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
                 pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
 
                 fig = plot_transition(
-                    x.numpy(), true_next_x, pred_next_x.loc[0, 0].numpy(),
-                    torch.diag(pred_next_x.covariance_matrix[0, 0]).sqrt().numpy())
+                    x.numpy(), true_next_x, pred_next_x.loc[-1, -1].numpy(),
+                    torch.diag(pred_next_x.covariance_matrix[-1, -1]).sqrt().numpy())
                 fig.axes[0].set_title('{} {} Learned Function'.format(
                     experiment.model, experiment.dataset))
                 fig.show()

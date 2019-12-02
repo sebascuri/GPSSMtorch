@@ -259,7 +259,6 @@ class SSM(nn.Module, ABC):
             # COMPUTE Losses #
             ############################################################################
             if self.training:
-
                 y = output_sequence[:, t + 1].expand(
                     num_particles, batch_size, dim_outputs).permute(1, 2, 0)
 
@@ -452,9 +451,9 @@ class CBFSSM(SSM):
         error = next_x.loc - next_y.loc
 
         sigma_f = torch.diagonal(next_x.covariance_matrix, dim1=-1, dim2=-2)
-        sigma_y = next_y.scale + (self.k_factor - 1) * sigma_f
+        sigma_y = next_y.scale  # + (self.k_factor - 1) * sigma_f
 
-        gain = sigma_f / (sigma_f + sigma_y)
+        gain = sigma_f / (sigma_f + sigma_y / self.k_factor)
         neg_gain = torch.diag_embed(1 - gain)
 
         loc = next_x.loc + gain * error
@@ -500,9 +499,9 @@ class CBFSSMDiag(SSM):
         error = next_x.loc - next_y.loc
 
         sigma_f = torch.diagonal(next_x.covariance_matrix, dim1=-1, dim2=-2)
-        sigma_y = next_y.scale + (self.k_factor - 1) * sigma_f
+        sigma_y = next_y.scale  # + (self.k_factor - 1) * sigma_f
 
-        gain = sigma_f / (sigma_f + sigma_y)
+        gain = sigma_f / (sigma_f + sigma_y / self.k_factor)
         neg_gain = (1 - gain)
 
         loc = next_x.loc + gain * error
