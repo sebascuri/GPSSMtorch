@@ -6,10 +6,15 @@ train_results.txt
 test_results.txt
 *.pt
 *.png
-experiments/ablation/
-experiments/small_scale/
-experiments/kink/
-experiments/sample/
+Actuator/
+BallBeam/
+Drive/
+Dryer/
+GasFurnace/
+Flutter/
+PRSSM/
+CBFSSM/
+VCDT/
 
 # IntelliJ
 .idea
