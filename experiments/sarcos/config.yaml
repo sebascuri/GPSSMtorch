@@ -4,14 +4,15 @@ experiment:
 
 dataset:
   name: Sarcos
-  sequence_length: [20, 50, 100]
+  sequence_length: [10, 20, 50, 100]
   sequence_stride: 1
 
 optimization:
   learning_rate: 0.05
   batch_size: 32
   num_epochs: 10
-  curriculum: False # Flag that indicates if there is a curriculum.
+  eval_length: # Evaluation lengths.
+    - 100
 
 evaluation:
   plots: ['training_loss', 'prediction']
