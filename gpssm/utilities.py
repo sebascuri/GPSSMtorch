@@ -279,7 +279,7 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
 
             if '2d' in plot_list:
                 plot_list.remove('2d')
-                fig = plot_2d(mean[0].T, np.sqrt(scale[0]).T, outputs[0].numpy().T)
+                fig = plot_2d(mean[0].T, outputs[0].numpy().T)
                 fig.axes[0].set_title('{} {} {} Prediction'.format(
                     experiment.model, experiment.dataset, key.capitalize()))
                 fig.show()
