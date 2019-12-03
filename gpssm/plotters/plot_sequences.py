@@ -59,7 +59,7 @@ def plot_pred(pred_mean: np.ndarray, pred_std: np.ndarray = None,
                 (pred_mean + sigmas * pred_std)[idx],
                 alpha=0.2, facecolor=PRED_COLOR)
         axes[idx].set_ylabel('y_{}'.format(idx + 1))
-        if legend:
+        if legend and idx == 0:
             axes[idx].legend(loc='best')
 
     axes[-1].set_xlabel('Time')
