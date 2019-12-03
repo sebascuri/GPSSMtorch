@@ -40,9 +40,11 @@ class SSM(nn.Module, ABC):
     loss_key: str.
         Key to select loss to return, default ELBO.
     k_factor: float.
-
+        Factor for soft conditioning.
     loss_factors: dict.
         Factors to multiply each term of the ELBO with.
+    dataset_size: int.
+        Size of dataset.
 
     # TODO: Implement cubic sampling.
     """
@@ -57,7 +59,8 @@ class SSM(nn.Module, ABC):
                  cubic_sampling: bool = False,
                  loss_key: str = 'elbo',
                  k_factor: float = 1.,
-                 loss_factors: dict = None) -> None:
+                 loss_factors: dict = None,
+                 dataset_size: int = 1) -> None:
         super().__init__()
         self.dim_states = forward_model.num_outputs
         self.forward_model = forward_model
@@ -79,6 +82,7 @@ class SSM(nn.Module, ABC):
             loss_factors = dict(loglik=1., kl_uf=1., kl_ub=1., kl_x=1.,
                                 kl_conditioning=1.0, entropy=0.)
         self.loss_factors = loss_factors
+        self.dataset_size = dataset_size
 
     def __str__(self) -> str:
         """Return string of object with parameters."""
@@ -180,17 +184,17 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # INITIALIZE losses #
         ################################################################################
-        log_lik = torch.tensor(0.)
-        l2 = torch.tensor(0.)
-        kl_conditioning = torch.tensor(0.)
-        entropy = torch.tensor(0.)
+
+        # entropy = torch.tensor(0.)
         if self.training:
-            y_tilde = output_distribution.pop(0)
-            y = output_sequence[:, 0].expand(1, batch_size, dim_outputs
-                                             ).permute(1, 2, 0)
-            log_lik += y_pred.log_prob(y).mean()
-            l2 += ((y_pred.loc - y) ** 2).mean()
-            entropy += y_tilde.entropy().mean() / sequence_length
+            output_distribution.pop(0)
+            # entropy += y_tilde.entropy().mean() / sequence_length
+
+        y = output_sequence[:, 0].expand(1, batch_size, dim_outputs
+                                         ).permute(1, 2, 0)
+        log_lik = y_pred.log_prob(y).mean()
+        # l2 = ((y_pred.loc - y) ** 2).mean()
+        kl_conditioning = torch.tensor(0.)
 
         for t in range(sequence_length - 1):
             ############################################################################
@@ -258,13 +262,12 @@ class SSM(nn.Module, ABC):
             ############################################################################
             # COMPUTE Losses #
             ############################################################################
-            if self.training:
-                y = output_sequence[:, t + 1].expand(
-                    num_particles, batch_size, dim_outputs).permute(1, 2, 0)
-
-                log_lik += y_pred.log_prob(y).mean()
-                l2 += ((y_pred.loc - y) ** 2).mean()
-                entropy += y_tilde.entropy().mean() / sequence_length
+            # if self.training:
+            y = output_sequence[:, t + 1].expand(
+                num_particles, batch_size, dim_outputs).permute(1, 2, 0)
+            log_lik += y_pred.log_prob(y).mean()
+            # l2 += ((y_pred.loc - y) ** 2).mean()
+            # entropy += y_tilde.entropy().mean() / sequence_length
 
         assert len(outputs) == sequence_length
 
@@ -273,8 +276,11 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # Compute model KL divergences Divergences #
         ################################################################################
-        kl_uf = self.forward_model.kl_divergence() / sequence_length
-        kl_ub = self.backward_model.kl_divergence() / sequence_length
+        # kl_uf = self.forward_model.kl_divergence() / sequence_length
+        # kl_ub = self.backward_model.kl_divergence() / sequence_length
+        batch_size_factor = batch_size / self.dataset_size
+        kl_uf = self.forward_model.kl_divergence() * batch_size_factor
+        kl_ub = self.backward_model.kl_divergence() * batch_size_factor
 
         if self.loss_key.lower() == 'loglik':
             loss = -log_lik
@@ -284,15 +290,15 @@ class SSM(nn.Module, ABC):
                      - self.loss_factors['kl_uf'] * kl_uf
                      - self.loss_factors['kl_ub'] * kl_ub
                      - self.loss_factors['kl_conditioning'] * kl_conditioning
-                     + self.loss_factors['entropy'] * entropy
+                     # + self.loss_factors['entropy'] * entropy
                      )
-            str = 'elbo: {}, log_lik: {}, klx: {}, kluf: {}, klub: {}, klcond: {}, s:{}'
-            print(str.format(loss.item(), log_lik.item(), kl_x1.item(), kl_uf.item(),
-                             kl_ub.item(), kl_conditioning.item(), entropy.item()))
-        elif self.loss_key.lower() == 'l2':
-            loss = l2
-        elif self.loss_key.lower() == 'rmse':
-            loss = torch.sqrt(l2)
+            str_ = 'elbo: {}, log_lik: {}, klx: {}, kluf: {}, klub: {}, klcond: {}'
+            print(str_.format(loss.item(), log_lik.item(), kl_x1.item(), kl_uf.item(),
+                              kl_ub.item(), kl_conditioning.item()))
+        # elif self.loss_key.lower() == 'l2':
+        #     loss = l2
+        # elif self.loss_key.lower() == 'rmse':
+        #     loss = torch.sqrt(l2)
         else:
             raise NotImplementedError("Key {} not implemented".format(self.loss_key))
 
