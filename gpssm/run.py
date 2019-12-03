@@ -1,6 +1,7 @@
 """Project main runner file."""
 
 import torch
+import torch.optim
 from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
@@ -49,6 +50,7 @@ def main(experiment: Experiment, num_threads: int = 2):
 
     # Train.
     train_set = dataset(train=True, **dataset_config)
+    model.dataset_size = len(train_set)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     train(model, train_loader, optimizer, num_epochs, experiment)
     model.dump(experiment.fig_dir + 'model_final.txt')
@@ -57,6 +59,7 @@ def main(experiment: Experiment, num_threads: int = 2):
     # Evaluate.
     for key in ['train', 'test']:
         dataset_ = dataset(train=key == 'train', **dataset_config)
+        model.dataset_size = len(dataset_)
         for seq_len in eval_length:
             if seq_len is None:
                 seq_len = dataset_.experiment_length
