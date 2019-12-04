@@ -36,7 +36,7 @@ def main(experiment: Experiment, num_threads: int = 2):
         num_epochs = optim_config.get('num_epochs', 1)
     max_iter = optim_config.get('max_iter', 1)
 
-    learning_rate = optim_config.get('learning_rate', 0.1)
+    learning_rate = optim_config.get('learning_rate', 0.05)
     eval_length = optim_config.get('eval_length', [None])
 
     # Model Parameters
@@ -56,10 +56,12 @@ def main(experiment: Experiment, num_threads: int = 2):
     train_set = dataset(train=True, **dataset_config)
     print(train_set)
     model.dataset_size = len(train_set)
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(train_set,
+                              sampler=torch.utils.data.RandomSampler(train_set),
+                              batch_size=batch_size)
     if num_epochs is None:
         num_epochs = max(1, math.floor(max_iter * batch_size / len(train_set)))
-        print(num_epochs)
+
     train(model, train_loader, optimizer, num_epochs, experiment)
     model.dump(experiment.fig_dir + 'model_final.txt')
     save(experiment, model=model)
@@ -101,9 +103,9 @@ if __name__ == "__main__":
         configs = {'experiment': {'name': 'experiments/sample/'},
                    'model': {'dim_states': 4},
                    'dataset': {'sequence_length': 40},
-                   'optimization': {'eval_length': [50],
-                                    'max_iter': 1}}
-        model = 'softcbfssm'
+                   'optimization': {'eval_length': [None],
+                                    'max_iter': 300}}
+        model = 'PRSSM'
         dataset = 'Actuator'
 
     main(Experiment(model, dataset, args.seed, configs), args.num_threads)
