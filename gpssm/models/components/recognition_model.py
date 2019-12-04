@@ -98,7 +98,7 @@ class OutputRecognition(Recognition):
 
         loc = torch.zeros(batch_size, self.dim_states)
         loc[:, :dim_outputs] = output_sequence[:, 0]
-        cov = torch.diag(self.sd_noise ** 2)
+        cov = torch.diag(self.sd_noise ** 2 + 1e-6)
         cov = cov.expand(batch_size, *cov.shape)
         return MultivariateNormal(loc, covariance_matrix=cov)
 
@@ -112,7 +112,7 @@ class ZeroRecognition(OutputRecognition):
 
         batch_size = output_sequence.shape[0]
         loc = torch.zeros(batch_size, self.dim_states)
-        cov = torch.diag(self.sd_noise ** 2)
+        cov = torch.diag(self.sd_noise ** 2 + 1e-6)
         cov = cov.expand(batch_size, *cov.shape)
         return MultivariateNormal(loc, covariance_matrix=cov)
 
