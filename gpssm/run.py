@@ -8,6 +8,7 @@ from gpssm.models import get_model
 from gpssm.utilities import train, evaluate, Experiment, save
 import math
 
+
 def main(experiment: Experiment, num_threads: int = 2):
     """Run GPSSM inference.
 
@@ -42,7 +43,7 @@ def main(experiment: Experiment, num_threads: int = 2):
     model_config = experiment.configs.get('model', {})
 
     # Plot Parameters
-    plot_list = configs.get('plots', ['prediction', 'training_loss'])
+    plot_list = experiment.configs.get('plots', ['prediction', 'training_loss'])
 
     # Initialize dataset, model, and optimizer.
     dataset = get_dataset(experiment.dataset)
@@ -76,8 +77,8 @@ def main(experiment: Experiment, num_threads: int = 2):
             loader = DataLoader(dataset_, batch_size=batch_size, shuffle=False)
             evaluator = evaluate(model, loader, experiment, plot_list.copy(), eval_key)
             save(experiment, eval_train=evaluator)
-            evaluator.dump(experiment.fig_dir + '{}_results_{}.txt'.format(eval_key,
-                                                                           args.seed))
+            evaluator.dump(experiment.fig_dir + '{}_results_{}.txt'.format(
+                eval_key, experiment.seed))
 
 
 if __name__ == "__main__":
