@@ -248,10 +248,12 @@ class Drive(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'drive.mat'))
 
-        inputs = get_data_split(
-            np.stack([raw_data['u{}'.format(i)] for i in range(1, 4)]), train=train)
-        outputs = get_data_split(
-            np.stack([raw_data['z{}'.format(i)] for i in range(1, 4)]), train=train)
+        inputs = get_data_split(raw_data['u1'][np.newaxis], train=train)
+        outputs = get_data_split(raw_data['z1'][np.newaxis], train=train)
+        # inputs = get_data_split(
+        #     np.stack([raw_data['u{}'.format(i)] for i in range(1, 4)]), train=train)
+        # outputs = get_data_split(
+        #     np.stack([raw_data['z{}'.format(i)] for i in range(1, 4)]), train=train)
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
