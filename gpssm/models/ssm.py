@@ -159,8 +159,11 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # Initial State #
         ################################################################################
-        q_x1 = self.posterior_recognition(output_sequence, input_sequence)
-        p_x1 = self.prior_recognition(output_sequence, input_sequence)
+        rec_length = self.posterior_recognition.length
+        q_x1 = self.posterior_recognition(
+            output_sequence[:, :rec_length],  input_sequence[:, :rec_length])
+        p_x1 = self.prior_recognition(output_sequence[:, :rec_length],
+                                      input_sequence[:, :rec_length])
         kl_x1 = kl_divergence(q_x1, p_x1).mean()
 
         # Initial State: Tensor (batch_size x dim_states x num_particles)
@@ -457,9 +460,9 @@ class CBFSSM(SSM):
         error = next_x.loc - next_y.loc
 
         sigma_f = torch.diagonal(next_x.covariance_matrix, dim1=-1, dim2=-2)
-        sigma_y = next_y.scale  # + (self.k_factor - 1) * sigma_f
+        sigma_y = next_y.scale + (self.k_factor - 1) * sigma_f
 
-        gain = sigma_f / (sigma_f + sigma_y / self.k_factor)
+        gain = sigma_f / (sigma_f + sigma_y)
         neg_gain = torch.diag_embed(1 - gain)
 
         loc = next_x.loc + gain * error
@@ -505,9 +508,9 @@ class CBFSSMDiag(SSM):
         error = next_x.loc - next_y.loc
 
         sigma_f = torch.diagonal(next_x.covariance_matrix, dim1=-1, dim2=-2)
-        sigma_y = next_y.scale  # + (self.k_factor - 1) * sigma_f
+        sigma_y = next_y.scale + (self.k_factor - 1) * sigma_f
 
-        gain = sigma_f / (sigma_f + sigma_y / self.k_factor)
+        gain = sigma_f / (sigma_f + sigma_y)
         neg_gain = (1 - gain)
 
         loc = next_x.loc + gain * error
