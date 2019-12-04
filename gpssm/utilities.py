@@ -15,7 +15,6 @@ from .dataset import get_dataset, Dataset
 from .models import get_model, SSM
 from .plotters import plot_pred, plot_2d, plot_transition, plot_loss
 from collections import namedtuple
-import gc
 
 
 __author__ = 'Sebastian Curi'
@@ -80,7 +79,6 @@ class Evaluator(dict):
     def nrmse(predictions: Normal, true_values: Tensor, _: Tensor = None) -> float:
         """Return the Normalized RMSE between the true values and the mean predictions.
 
-        # TODO: Add rmse
         Parameters
         ----------
         predictions: MultivariateNormal.
@@ -220,8 +218,6 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
             # Back-propagate
             loss.backward()
             optimizer.step()
-            gc.collect()
-            del inputs, outputs, states
             losses.append(loss.item())
 
         print(model)
