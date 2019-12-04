@@ -16,7 +16,6 @@ from .models import get_model, SSM
 from .plotters import plot_pred, plot_2d, plot_transition, plot_loss
 from collections import namedtuple
 
-
 __author__ = 'Sebastian Curi'
 __all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load',
            'make_dir']
@@ -208,12 +207,13 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
     """
     losses = []
     for _ in tqdm(range(num_epochs)):
-        for inputs, outputs, states in tqdm(dataloader):
+        for iter_, (inputs, outputs, states) in enumerate(tqdm(dataloader)):
             # Zero the gradients of the Optimizer
             optimizer.zero_grad()
 
             # Compute the loss.
-            predicted_outputs, loss = model.forward(outputs, inputs)
+            predicted_outputs, loss = model.forward(outputs, inputs,
+                                                    print=(iter_ % 50) == 0)
 
             # Back-propagate
             loss.backward()

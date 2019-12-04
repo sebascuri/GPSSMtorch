@@ -195,8 +195,8 @@ class SSM(nn.Module, ABC):
 
         y = output_sequence[:, 0].expand(1, batch_size, dim_outputs
                                          ).permute(1, 2, 0)
-        log_lik = y_pred.log_prob(y).mean()
-        # l2 = ((y_pred.loc - y) ** 2).mean()
+        log_lik = y_pred.log_prob(y).mean()  # type: torch.Tensor
+        l2 = ((y_pred.loc - y) ** 2).mean()  # type: torch.Tensor
         kl_conditioning = torch.tensor(0.)
 
         for t in range(sequence_length - 1):
@@ -269,7 +269,7 @@ class SSM(nn.Module, ABC):
             y = output_sequence[:, t + 1].expand(
                 num_particles, batch_size, dim_outputs).permute(1, 2, 0)
             log_lik += y_pred.log_prob(y).mean()
-            # l2 += ((y_pred.loc - y) ** 2).mean()
+            l2 += ((y_pred.loc - y) ** 2).mean()
             # entropy += y_tilde.entropy().mean() / sequence_length
 
         assert len(outputs) == sequence_length
@@ -295,13 +295,14 @@ class SSM(nn.Module, ABC):
                      - self.loss_factors['kl_conditioning'] * kl_conditioning
                      # + self.loss_factors['entropy'] * entropy
                      )
-            str_ = 'elbo: {}, log_lik: {}, klx: {}, kluf: {}, klub: {}, klcond: {}'
-            print(str_.format(loss.item(), log_lik.item(), kl_x1.item(), kl_uf.item(),
-                              kl_ub.item(), kl_conditioning.item()))
-        # elif self.loss_key.lower() == 'l2':
-        #     loss = l2
-        # elif self.loss_key.lower() == 'rmse':
-        #     loss = torch.sqrt(l2)
+            if kwargs.get('print', False):
+                str_ = 'elbo: {}, log_lik: {}, klx: {}, kluf: {}, klub: {}, klcond: {}'
+                print(str_.format(loss.item(), log_lik.item(), kl_x1.item(),
+                                  kl_uf.item(), kl_ub.item(), kl_conditioning.item()))
+        elif self.loss_key.lower() == 'l2':
+            loss = l2
+        elif self.loss_key.lower() == 'rmse':
+            loss = torch.sqrt(l2)
         else:
             raise NotImplementedError("Key {} not implemented".format(self.loss_key))
 
