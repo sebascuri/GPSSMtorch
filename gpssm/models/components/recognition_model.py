@@ -80,12 +80,11 @@ class OutputRecognition(Recognition):
     """
 
     def __init__(self, dim_outputs: int, dim_inputs: int, dim_states: int,
-                 length: int = 1, variance: float = 1.0, learnable: bool = True
-                 ) -> None:
+                 length: int = 1, variance: float = 1.0) -> None:
         super().__init__(dim_outputs, dim_inputs, dim_states, length)
         self.variance_t = nn.Parameter(
             torch.ones(dim_states) * inverse_softplus(torch.tensor(variance)),
-            requires_grad=learnable)
+            requires_grad=True)
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""
