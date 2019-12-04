@@ -164,7 +164,7 @@ class SSM(nn.Module, ABC):
             output_sequence[:, :rec_length],  input_sequence[:, :rec_length])
         p_x1 = self.prior_recognition(output_sequence[:, :rec_length],
                                       input_sequence[:, :rec_length])
-        kl_x1 = kl_divergence(q_x1, p_x1).mean()
+        kl_x1 = kl_divergence(q_x1, p_x1).sum()
 
         # Initial State: Tensor (batch_size x dim_states x num_particles)
 
@@ -195,8 +195,8 @@ class SSM(nn.Module, ABC):
 
         y = output_sequence[:, 0].expand(1, batch_size, dim_outputs
                                          ).permute(1, 2, 0)
-        log_lik = y_pred.log_prob(y).mean()  # type: torch.Tensor
-        l2 = ((y_pred.loc - y) ** 2).mean()  # type: torch.Tensor
+        log_lik = y_pred.log_prob(y).sum()  # type: torch.Tensor
+        l2 = ((y_pred.loc - y) ** 2).sum()  # type: torch.Tensor
         kl_conditioning = torch.tensor(0.)
 
         for t in range(sequence_length - 1):
@@ -245,7 +245,7 @@ class SSM(nn.Module, ABC):
                 y_tilde = output_distribution.pop(0)
                 p_next_state = next_state
                 next_state = self._condition(next_state, y_tilde)
-                kl_conditioning += kl_divergence(next_state, p_next_state).mean()
+                kl_conditioning += kl_divergence(next_state, p_next_state).sum()
 
             ############################################################################
             # RESAMPLE State #
@@ -268,8 +268,8 @@ class SSM(nn.Module, ABC):
             # if self.training:
             y = output_sequence[:, t + 1].expand(
                 num_particles, batch_size, dim_outputs).permute(1, 2, 0)
-            log_lik += y_pred.log_prob(y).mean()
-            l2 += ((y_pred.loc - y) ** 2).mean()
+            log_lik += y_pred.log_prob(y).sum()
+            l2 += ((y_pred.loc - y) ** 2).sum()
             # entropy += y_tilde.entropy().mean() / sequence_length
 
         assert len(outputs) == sequence_length

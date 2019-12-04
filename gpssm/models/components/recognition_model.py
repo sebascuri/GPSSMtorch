@@ -13,6 +13,8 @@ __author__ = 'Sebastian Curi'
 __all__ = ['Recognition', 'OutputRecognition', 'ZeroRecognition', 'NNRecognition',
            'ConvRecognition', 'LSTMRecognition']
 
+EPS = 1e-6
+
 
 class Recognition(nn.Module, ABC):
     """Base Class for recognition Module.
@@ -98,7 +100,7 @@ class OutputRecognition(Recognition):
 
         loc = torch.zeros(batch_size, self.dim_states)
         loc[:, :dim_outputs] = output_sequence[:, 0]
-        cov = torch.diag(self.sd_noise ** 2 + 1e-6)
+        cov = torch.diag(self.sd_noise ** 2 + EPS)
         cov = cov.expand(batch_size, *cov.shape)
         return MultivariateNormal(loc, covariance_matrix=cov)
 
@@ -112,7 +114,7 @@ class ZeroRecognition(OutputRecognition):
 
         batch_size = output_sequence.shape[0]
         loc = torch.zeros(batch_size, self.dim_states)
-        cov = torch.diag(self.sd_noise ** 2 + 1e-6)
+        cov = torch.diag(self.sd_noise ** 2 + EPS)
         cov = cov.expand(batch_size, *cov.shape)
         return MultivariateNormal(loc, covariance_matrix=cov)
 
@@ -149,7 +151,7 @@ class NNRecognition(Recognition):
         x = torch.sigmoid(self.linear(x))
 
         return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            nn.functional.softplus(self.var(x))))
+            nn.functional.softplus(self.var(x)) + EPS))
 
 
 class ConvRecognition(Recognition):
@@ -196,7 +198,7 @@ class ConvRecognition(Recognition):
         x = self.max_pool2(torch.relu(self.conv2(x)))  # type: ignore
         x = x.view(batch_size, -1)  # type: ignore
         return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            nn.functional.softplus(self.var(x))))
+            nn.functional.softplus(self.var(x)) + EPS))
 
 
 class LSTMRecognition(Recognition):
@@ -233,4 +235,4 @@ class LSTMRecognition(Recognition):
         out, hidden = self.lstm(io_sequence, hidden)
         x = out[:, -1]
         return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            nn.functional.softplus(self.var(x))))
+            nn.functional.softplus(self.var(x)) + EPS))
