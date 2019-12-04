@@ -380,8 +380,7 @@ class SSM(nn.Module, ABC):
                                                         dim1=-1, dim2=-2)), dim=1)
             # assert scale.shape == Size([batch_size, dim_states, num_particles])
 
-            q = self.transitions.diag_covariance.expand(batch_size, num_particles, -1)
-            next_y_tilde_d = Normal(loc, scale + q.transpose(-1, -2))
+            next_y_tilde_d = Normal(loc, scale)
             ############################################################################
             # RESAMPLE y_tilde #
             ############################################################################

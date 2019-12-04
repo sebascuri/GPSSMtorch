@@ -4,7 +4,7 @@ from abc import ABC
 from torch import Tensor
 import torch
 import torch.nn as nn
-import numpy as np
+from .utilities import inverse_softplus, safe_softplus
 from gpytorch.distributions import MultivariateNormal
 import copy
 from typing import Any
@@ -12,8 +12,6 @@ from typing import Any
 __author__ = 'Sebastian Curi'
 __all__ = ['Recognition', 'OutputRecognition', 'ZeroRecognition', 'NNRecognition',
            'ConvRecognition', 'LSTMRecognition']
-
-EPS = 1e-6
 
 
 class Recognition(nn.Module, ABC):
@@ -68,7 +66,7 @@ class OutputRecognition(Recognition):
     --------
     >>> from torch.testing import assert_allclose
     >>> recognition = OutputRecognition(2, 1, 4, 1, variance=0.01)
-    >>> assert_allclose(recognition.sd_noise, torch.ones(4) * 0.1)
+    >>> assert_allclose(recognition.variance, torch.ones(4) * 0.01)
     >>> output_seq = torch.randn(32, 8, 2)
     >>> input_seq = torch.randn(32, 8, 1)
     >>> x0 = recognition(output_seq, input_seq)
@@ -82,14 +80,21 @@ class OutputRecognition(Recognition):
     """
 
     def __init__(self, dim_outputs: int, dim_inputs: int, dim_states: int,
-                 length: int = 1, variance: float = 1.0) -> None:
+                 length: int = 1, variance: float = 1.0, learnable: bool = True
+                 ) -> None:
         super().__init__(dim_outputs, dim_inputs, dim_states, length)
-        self.sd_noise = nn.Parameter(torch.ones(self.dim_states) * np.sqrt(variance),
-                                     requires_grad=True)  # TODO: add learnable.
+        self.variance_t = nn.Parameter(
+            torch.ones(dim_states) * inverse_softplus(torch.tensor(variance)),
+            requires_grad=learnable)
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""
-        return str(self.sd_noise.detach().numpy() ** 2)
+        return str(self.variance.detach().numpy())
+
+    @property
+    def variance(self) -> torch.Tensor:
+        """Get Diagonal Covariance Matrix."""
+        return safe_softplus(self.variance_t)
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
@@ -100,7 +105,7 @@ class OutputRecognition(Recognition):
 
         loc = torch.zeros(batch_size, self.dim_states)
         loc[:, :dim_outputs] = output_sequence[:, 0]
-        cov = torch.diag(self.sd_noise ** 2 + EPS)
+        cov = torch.diag(self.variance)
         cov = cov.expand(batch_size, *cov.shape)
         return MultivariateNormal(loc, covariance_matrix=cov)
 
@@ -114,7 +119,7 @@ class ZeroRecognition(OutputRecognition):
 
         batch_size = output_sequence.shape[0]
         loc = torch.zeros(batch_size, self.dim_states)
-        cov = torch.diag(self.sd_noise ** 2 + EPS)
+        cov = torch.diag(self.variance)
         cov = cov.expand(batch_size, *cov.shape)
         return MultivariateNormal(loc, covariance_matrix=cov)
 
@@ -133,7 +138,7 @@ class NNRecognition(Recognition):
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""
-        return str(nn.functional.softplus(self.var.bias.detach()).numpy())
+        return str(safe_softplus(self.var.bias).detach().numpy())
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
@@ -151,7 +156,7 @@ class NNRecognition(Recognition):
         x = torch.sigmoid(self.linear(x))
 
         return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            nn.functional.softplus(self.var(x)) + EPS))
+            safe_softplus(self.var(x))))
 
 
 class ConvRecognition(Recognition):
@@ -180,7 +185,7 @@ class ConvRecognition(Recognition):
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""
-        return str(nn.functional.softplus(self.var.bias.detach()).numpy())
+        return str(safe_softplus(self.var.bias).detach().numpy())
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
@@ -198,7 +203,7 @@ class ConvRecognition(Recognition):
         x = self.max_pool2(torch.relu(self.conv2(x)))  # type: ignore
         x = x.view(batch_size, -1)  # type: ignore
         return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            nn.functional.softplus(self.var(x)) + EPS))
+            safe_softplus(self.var(x))))
 
 
 class LSTMRecognition(Recognition):
@@ -216,7 +221,7 @@ class LSTMRecognition(Recognition):
 
     def __str__(self) -> str:
         """Return recognition model parameters as a string."""
-        return str(nn.functional.softplus(self.var.bias.detach()).numpy())
+        return str(safe_softplus(self.var.bias).detach().numpy())
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
@@ -235,4 +240,4 @@ class LSTMRecognition(Recognition):
         out, hidden = self.lstm(io_sequence, hidden)
         x = out[:, -1]
         return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            nn.functional.softplus(self.var(x)) + EPS))
+            safe_softplus(self.var(x))))

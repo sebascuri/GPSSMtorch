@@ -1,9 +1,8 @@
 """Emission model for GPSSM's."""
-import numpy as np
 import torch
 import torch.nn as nn
 from gpytorch.distributions import MultivariateNormal
-
+from .utilities import inverse_softplus, safe_softplus
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Transitions']
@@ -26,17 +25,18 @@ class Transitions(nn.Module):
     def __init__(self, dim_states: int, variance: float = 1.0, learnable: bool = True):
         super().__init__()
         self.dim_states = dim_states
-        self.sd_noise = nn.Parameter(torch.ones(dim_states) * np.sqrt(variance),
-                                     requires_grad=learnable)
+        self.variance_t = nn.Parameter(
+            torch.ones(dim_states) * inverse_softplus(torch.tensor(variance)),
+            requires_grad=learnable)
 
     def __str__(self) -> str:
         """Return emission model parameters as a string."""
-        return str(self.sd_noise.detach().numpy() ** 2)
+        return str(self.variance.detach().numpy())
 
     @property
-    def diag_covariance(self) -> torch.Tensor:
+    def variance(self) -> torch.Tensor:
         """Get Diagonal Covariance Matrix."""
-        return self.sd_noise ** 2
+        return safe_softplus(self.variance_t)
 
     def forward(self, *args: MultivariateNormal, **kwargs) -> MultivariateNormal:
         """Compute the marginal distribution of the transmission.
@@ -53,7 +53,6 @@ class Transitions(nn.Module):
         """
         f_samples = args[0]
         batch_size, dim_state, num_particles = f_samples.loc.shape
-        cov = self.diag_covariance.expand(batch_size, num_particles, dim_state
-                                          ).transpose(1, 2)
+        cov = self.variance.expand(batch_size, num_particles, dim_state).transpose(1, 2)
         return MultivariateNormal(
             f_samples.loc, f_samples.lazy_covariance_matrix.add_diag(cov).add_jitter())
