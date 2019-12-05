@@ -5,7 +5,7 @@ import torch.optim
 from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
-from gpssm.utilities import train, evaluate, Experiment, save, dump
+from gpssm.utilities import train, evaluate, Experiment, save, dump, plot_transitions
 import math
 
 
@@ -27,23 +27,16 @@ def main(experiment: Experiment, num_threads: int = 2):
     # Dataset Parameters
     dataset_config = experiment.configs.get('dataset', {})
 
-    # Optimizer Parameters
-    optim_config = experiment.configs.get('optimization', {})
-    batch_size = optim_config.get('batch_size', 32)
-    if 'max_iter' in optim_config:
-        num_epochs = None
-    else:
-        num_epochs = optim_config.get('num_epochs', 1)
-    max_iter = optim_config.get('max_iter', 1)
-
-    learning_rate = optim_config.get('learning_rate', 0.05)
-    eval_length = optim_config.get('eval_length', [None])
+    # Optimization Parameters
+    opt_config = experiment.configs.get('optimization', {})
+    batch_size = opt_config.get('batch_size', 10)
+    num_epochs = None if 'max_iter' in opt_config else opt_config.get('num_epochs', 1)
+    max_iter = opt_config.get('max_iter', 1)
+    learning_rate = opt_config.get('learning_rate', 0.1)
+    eval_length = opt_config.get('eval_length', [None])
 
     # Model Parameters
     model_config = experiment.configs.get('model', {})
-
-    # Plot Parameters
-    plot_list = experiment.configs.get('plots', ['prediction', 'training_loss'])
 
     # Initialize dataset, model, and optimizer.
     dataset = get_dataset(experiment.dataset)
@@ -78,10 +71,13 @@ def main(experiment: Experiment, num_threads: int = 2):
 
             dataset_.sequence_length = seq_len
             loader = DataLoader(dataset_, batch_size=batch_size, shuffle=False)
-            evaluator = evaluate(model, loader, experiment, plot_list.copy(), eval_key)
+            evaluator = evaluate(model, loader, experiment, eval_key)
             save(experiment, eval_train=evaluator)
             dump(str(evaluator), experiment.fig_dir + '{}_results_{}.txt'.format(
                 eval_key, experiment.seed))
+
+    if 'kink' in experiment.dataset:
+        plot_transitions(model, experiment, dataset.f)
 
 
 if __name__ == "__main__":
@@ -102,11 +98,12 @@ if __name__ == "__main__":
         dataset = configs.get('dataset').pop('name')
     else:
         configs = {'experiment': {'name': 'experiments/sample/'},
+                   'print_iter': 20,
                    'model': {'dim_states': 4,
                              'forward': {'kernel': {'shared': True}}},
-                   'dataset': {'sequence_length': 40},
+                   'dataset': {'sequence_length': 50},
                    'optimization': {'eval_length': [None],
-                                    'max_iter': 300}}
+                                    'max_iter': 50}}
         model = 'PRSSM'
         dataset = 'Actuator'
 

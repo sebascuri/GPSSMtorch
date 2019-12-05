@@ -7,10 +7,9 @@ from torch import Tensor
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 from torch.distributions import Normal
-import gpytorch
-from gpytorch.distributions import MultivariateNormal
+
 from tqdm import tqdm
-from typing import List
+from typing import List, Callable
 from .dataset import get_dataset, Dataset
 from .models import get_model, SSM
 from .plotters import plot_pred, plot_2d, plot_transition, plot_loss
@@ -18,7 +17,7 @@ from collections import namedtuple
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load',
-           'make_dir', 'dump']
+           'make_dir', 'dump', 'plot_transitions']
 
 
 class Evaluator(dict):
@@ -167,7 +166,7 @@ def make_dir(name):
         pass
 
 
-def approximate_with_normal(predicted_outputs: List[MultivariateNormal]) -> Normal:
+def approximate_with_normal(predicted_outputs: List[Normal]) -> Normal:
     """Approximate a particle distribution with a Normal by moment matching."""
     sequence_length = len(predicted_outputs)
     batch_size, dim_outputs, _ = predicted_outputs[0].loc.shape
@@ -204,19 +203,34 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
         List of losses encountered during training.
     """
     losses = []
+    iter_ = 0
+    dataset = dataloader.dataset  # type: Dataset  # type: ignore
+    output_scale = torch.tensor(dataset.output_normalizer.sd).float()
+    evaluator = Evaluator()
+    print_iter = experiment.configs.get('print_iter', None)
+
+    train_file = '{}trainiter{}.txt'.format(experiment.fig_dir, experiment.seed)
+    if os.path.exists(train_file):
+        os.remove(train_file)
+
     for _ in tqdm(range(num_epochs)):
-        for iter_, (inputs, outputs, states) in enumerate(tqdm(dataloader)):
+        for inputs, outputs, _ in tqdm(dataloader):
             # Zero the gradients of the Optimizer
             optimizer.zero_grad()
 
             # Compute the loss.
-            predicted_outputs, loss = model.forward(outputs, inputs,
-                                                    print=(iter_ % 50) == 0)
+            print_flag = print_iter is not None and (iter_ % print_iter) == 0
+            predicted_outputs, loss = model.forward(outputs, inputs, print=True)
+            if print_flag:
+                _evaluate(predicted_outputs, outputs, output_scale, evaluator,
+                          experiment, 'trainiter_{}'.format(iter_))
+                dump(str(evaluator) + '\n', train_file, 'a+')
 
             # Back-propagate
             loss.backward()
             optimizer.step()
             losses.append(loss.item())
+            iter_ += 1
 
         print(model)
 
@@ -229,8 +243,8 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
     return losses
 
 
-def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
-             plot_list: list = None, key: str = '') -> Evaluator:
+def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment, key: str = ''
+             ) -> Evaluator:
     """Evaluate a model.
 
     Parameters
@@ -241,67 +255,69 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment,
         Loader to iterate data.
     experiment: Experiment.
         Experiment meta-data.
-    plot_list: list of str.
-        List of plotters.
     key: str.
         Key to end files with.
 
     """
-    plot_list = [] if plot_list is None else plot_list
     dataset = dataloader.dataset  # type: Dataset  # type: ignore
+    output_scale = torch.tensor(dataset.output_normalizer.sd).float()
     evaluator = Evaluator()
 
-    with torch.no_grad(), gpytorch.settings.fast_pred_var():
+    with torch.no_grad():
         model.eval()
         for inputs, outputs, states in dataloader:
             predicted_outputs, _ = model(outputs, inputs)
-            predicted_outputs = approximate_with_normal(predicted_outputs)
-
-            mean = predicted_outputs.loc.detach().numpy()
-            scale = predicted_outputs.scale.detach().numpy()
-
-            evaluator.evaluate(predicted_outputs, outputs,
-                               torch.tensor(dataset.output_normalizer.sd).float())
-
-            if 'prediction' in plot_list:
-                plot_list.remove('prediction')
-                fig = plot_pred(mean[-1].T, np.sqrt(scale[-1]).T, outputs[-1].numpy().T)
-                fig.axes[0].set_title('{} {} {} Prediction'.format(
-                    experiment.model, experiment.dataset, key.capitalize()))
-                fig.show()
-                fig.savefig('{}prediction_{}.png'.format(experiment.fig_dir, key))
-
-            if '2d' in plot_list:
-                plot_list.remove('2d')
-                fig = plot_2d(mean[-1].T, outputs[-1].numpy().T)
-                fig.axes[0].set_title('{} {} {} Prediction'.format(
-                    experiment.model, experiment.dataset, key.capitalize()))
-                fig.show()
-                fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
-
-            if 'transition' in plot_list and key == 'test':
-                plot_list.remove('transition')
-                gp = model.forward_model
-                transition = model.transitions
-                x = torch.arange(-3, 1, 0.1)
-                true_next_x = dataset.f(x.numpy())
-                pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
-
-                fig = plot_transition(
-                    x.numpy(), true_next_x, pred_next_x.loc[-1, -1].numpy(),
-                    torch.diag(pred_next_x.covariance_matrix[-1, -1]).sqrt().numpy())
-                fig.axes[0].set_title('{} {} Learned Function'.format(
-                    experiment.model, experiment.dataset))
-                fig.show()
-                fig.savefig('{}transition.png'.format(experiment.fig_dir))
-
-        print('Sequence Length: {}. LogLik: {:.4}. NRMSE: {:.4}, RMSE: {:.4}'.format(
-            dataset.sequence_length,
-            np.array(evaluator['loglik']).mean(),
-            np.array(evaluator['nrmse']).mean(),
-            np.array(evaluator['rmse']).mean(),
-        ))
+            _evaluate(predicted_outputs, outputs, output_scale, evaluator, experiment,
+                      key)
+        print('Sequence Length: {}. {}'.format(dataset.sequence_length, evaluator))
     return evaluator
+
+
+def _evaluate(predicted_outputs: List[Normal], outputs: Tensor, output_scale: Tensor,
+              evaluator: Evaluator, experiment: Experiment, key: str) -> None:
+    collapsed_predicted_outputs = approximate_with_normal(predicted_outputs)
+
+    mean = collapsed_predicted_outputs.loc.detach().numpy()
+    scale = collapsed_predicted_outputs.scale.detach().numpy()
+
+    evaluator.evaluate(collapsed_predicted_outputs, outputs, output_scale)
+
+    fig = plot_pred(mean[-1].T, np.sqrt(scale[-1]).T, outputs[-1].numpy().T)
+    fig.axes[0].set_title('{} {} {} Prediction'.format(
+        experiment.model, experiment.dataset, key.capitalize()))
+    fig.show()
+    fig.savefig('{}prediction_{}.png'.format(experiment.fig_dir, key))
+
+    if 'Robomove' in experiment.dataset.lower():
+        fig = plot_2d(mean[-1].T, outputs[-1].numpy().T)
+        fig.axes[0].set_title('{} {} {} Prediction'.format(
+            experiment.model, experiment.dataset, key.capitalize()))
+        fig.show()
+        fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
+
+
+def plot_transitions(model: SSM, experiment: Experiment, f: Callable) -> None:
+    """Plot true and predicted transition function.
+
+    Parameters
+    ----------
+    model: SSM.
+    experiment: Experiment.
+    f: callable.
+    """
+    gp = model.forward_model
+    transition = model.transitions
+    x = torch.arange(-3, 1, 0.1)
+    true_next_x = f(x.numpy())
+    pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
+
+    fig = plot_transition(
+        x.numpy(), true_next_x, pred_next_x.loc[-1, -1].numpy(),
+        torch.diag(pred_next_x.covariance_matrix[-1, -1]).sqrt().numpy())
+    fig.axes[0].set_title('{} {} Learned Function'.format(
+        experiment.model, experiment.dataset))
+    fig.show()
+    fig.savefig('{}transition.png'.format(experiment.fig_dir))
 
 
 def save(experiment: Experiment, **kwargs) -> None:
@@ -370,7 +386,7 @@ def load(experiment: Experiment, key: str) -> list:
     return values
 
 
-def dump(string: str, file_name: str) -> None:
+def dump(string: str, file_name: str, mode='w') -> None:
     """Dump string to file."""
-    with open(file_name, 'w') as file:
+    with open(file_name, mode) as file:
         file.write(string)
