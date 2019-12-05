@@ -18,7 +18,7 @@ from collections import namedtuple
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load',
-           'make_dir']
+           'make_dir', 'dump']
 
 
 class Evaluator(dict):
@@ -28,14 +28,12 @@ class Evaluator(dict):
         self.criteria = ['loglik', 'nrmse', 'rmse']
         super().__init__({criterion: [] for criterion in self.criteria})
 
-    def dump(self, file_name):
-        """Dump evaluations to a file."""
-        with open(file_name, 'w') as file:
-            file.write('Log-Lik: {:.4}. NRMSE: {:.4}. RMSE: {:.4} '.format(
-                np.array(self['loglik']).mean(),
-                np.array(self['nrmse']).mean(),
-                np.array(self['rmse']).mean()
-            ))
+    def __str__(self):
+        return 'Log-Lik: {:.4}. NRMSE: {:.4}. RMSE: {:.4} '.format(
+            np.array(self['loglik']).mean(),
+            np.array(self['nrmse']).mean(),
+            np.array(self['rmse']).mean()
+        )
 
     def evaluate(self, predictions: Normal, true_values: Tensor, scale: Tensor) -> None:
         """Return the RMS error between the true values and the mean predictions.
@@ -370,3 +368,9 @@ def load(experiment: Experiment, key: str) -> list:
             values.append(val)
 
     return values
+
+
+def dump(string: str, file_name: str) -> None:
+    """Dump string to file."""
+    with open(file_name, 'w') as file:
+        file.write(string)

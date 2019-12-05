@@ -5,7 +5,7 @@ import torch.optim
 from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
-from gpssm.utilities import train, evaluate, Experiment, save
+from gpssm.utilities import train, evaluate, Experiment, save, dump
 import math
 
 
@@ -49,7 +49,7 @@ def main(experiment: Experiment, num_threads: int = 2):
     dataset = get_dataset(experiment.dataset)
     model = get_model(experiment.model, dataset.dim_outputs, dataset.dim_inputs,
                       **model_config)
-    model.dump(experiment.fig_dir + 'model_initial.txt')
+    dump(str(model), experiment.fig_dir + 'model_initial.txt')
     optimizer = torch.optim.Adam(model.properties(), lr=learning_rate)
 
     # Train.
@@ -62,9 +62,10 @@ def main(experiment: Experiment, num_threads: int = 2):
     if num_epochs is None:
         num_epochs = max(1, math.floor(max_iter * batch_size / len(train_set)))
 
-    train(model, train_loader, optimizer, num_epochs, experiment)
-    model.dump(experiment.fig_dir + 'model_final.txt')
+    losses = train(model, train_loader, optimizer, num_epochs, experiment)
     save(experiment, model=model)
+    dump(str(model), experiment.fig_dir + 'model_final_{}.txt'.format(experiment.seed))
+    dump(str(losses), experiment.fig_dir + 'losses_{}.txt'.format(experiment.seed))
 
     # Evaluate.
     for key in ['train', 'test']:
@@ -79,7 +80,7 @@ def main(experiment: Experiment, num_threads: int = 2):
             loader = DataLoader(dataset_, batch_size=batch_size, shuffle=False)
             evaluator = evaluate(model, loader, experiment, plot_list.copy(), eval_key)
             save(experiment, eval_train=evaluator)
-            evaluator.dump(experiment.fig_dir + '{}_results_{}.txt'.format(
+            dump(str(evaluator), experiment.fig_dir + '{}_results_{}.txt'.format(
                 eval_key, experiment.seed))
 
 
@@ -101,7 +102,8 @@ if __name__ == "__main__":
         dataset = configs.get('dataset').pop('name')
     else:
         configs = {'experiment': {'name': 'experiments/sample/'},
-                   'model': {'dim_states': 4},
+                   'model': {'dim_states': 4,
+                             'forward': {'kernel': {'shared': True}}},
                    'dataset': {'sequence_length': 40},
                    'optimization': {'eval_length': [None],
                                     'max_iter': 300}}
