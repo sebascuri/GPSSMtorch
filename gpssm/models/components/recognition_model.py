@@ -4,7 +4,7 @@ from abc import ABC
 from torch import Tensor
 import torch
 import torch.nn as nn
-from .utilities import inverse_softplus, safe_softplus
+from gpssm.models.components.utilities import inverse_softplus, safe_softplus
 from gpytorch.distributions import MultivariateNormal
 import copy
 from typing import Any
@@ -66,12 +66,13 @@ class OutputRecognition(Recognition):
     --------
     >>> from torch.testing import assert_allclose
     >>> recognition = OutputRecognition(2, 1, 4, 1, variance=0.01)
+    >>> num_particles = 8
     >>> assert_allclose(recognition.variance, torch.ones(4) * 0.01)
     >>> output_seq = torch.randn(32, 8, 2)
     >>> input_seq = torch.randn(32, 8, 1)
-    >>> x0 = recognition(output_seq, input_seq)
-    >>> assert_allclose(x0.loc[:, :2], output_seq[:, 0])
-    >>> cov = torch.diag(torch.ones(4) * 0.01).expand(32, 4, 4)
+    >>> x0 = recognition(output_seq, input_seq, num_particles=num_particles)
+    >>> assert_allclose(x0.loc[:, :2, 0], output_seq[:, 0])
+    >>> cov = torch.diag_embed(torch.ones(32, 4, num_particles) * 0.01)
     >>> assert_allclose(x0.covariance_matrix, cov)
     >>> debug_str = str(recognition)
     >>> other = recognition.copy()
@@ -98,15 +99,18 @@ class OutputRecognition(Recognition):
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
         output_sequence, input_sequence = inputs
+        num_particles = kwargs.get('num_particles', 1)
+
         assert output_sequence.dim() == 3
         dim_outputs = output_sequence.shape[-1]
         batch_size = output_sequence.shape[0]
 
         loc = torch.zeros(batch_size, self.dim_states)
         loc[:, :dim_outputs] = output_sequence[:, 0]
-        cov = torch.diag(self.variance)
-        cov = cov.expand(batch_size, *cov.shape)
-        return MultivariateNormal(loc, covariance_matrix=cov)
+        loc = loc.expand(num_particles, batch_size, self.dim_states).permute(1, 2, 0)
+        cov = self.variance.expand(num_particles, batch_size, self.dim_states
+                                   ).permute(1, 2, 0)
+        return MultivariateNormal(loc, covariance_matrix=torch.diag_embed(cov))
 
 
 class ZeroRecognition(OutputRecognition):
@@ -114,13 +118,14 @@ class ZeroRecognition(OutputRecognition):
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        num_particles = kwargs.get('num_particles', 1)
         output_sequence, _ = inputs
 
         batch_size = output_sequence.shape[0]
-        loc = torch.zeros(batch_size, self.dim_states)
-        cov = torch.diag(self.variance)
-        cov = cov.expand(batch_size, *cov.shape)
-        return MultivariateNormal(loc, covariance_matrix=cov)
+        loc = torch.zeros(batch_size, self.dim_states, num_particles)
+        cov = self.variance.expand(num_particles, batch_size, self.dim_states
+                                   ).permute(1, 2, 0)
+        return MultivariateNormal(loc, covariance_matrix=torch.diag_embed(cov))
 
 
 class NNRecognition(Recognition):
@@ -141,6 +146,7 @@ class NNRecognition(Recognition):
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        num_particles = kwargs.get('num_particles', 1)
         output_sequence, input_sequence = inputs
 
         batch_size = output_sequence.shape[0]
@@ -154,8 +160,12 @@ class NNRecognition(Recognition):
         x = io_sequence.view(batch_size, -1)
         x = torch.sigmoid(self.linear(x))
 
-        return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            safe_softplus(self.var(x))))
+        loc = self.mean(x).expand(num_particles, batch_size, self.dim_states
+                                  ).permute(1, 2, 0)
+        cov = safe_softplus(self.var(x)).expand(
+            num_particles, batch_size, self.dim_states).permute(1, 2, 0)
+
+        return MultivariateNormal(loc, covariance_matrix=torch.diag_embed(cov))
 
 
 class ConvRecognition(Recognition):
@@ -188,6 +198,8 @@ class ConvRecognition(Recognition):
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        num_particles = kwargs.get('num_particles', 1)
+
         output_sequence, input_sequence = inputs
 
         batch_size = output_sequence.shape[0]
@@ -201,8 +213,13 @@ class ConvRecognition(Recognition):
         x = self.max_pool1(torch.relu(self.conv1(io_sequence)))
         x = self.max_pool2(torch.relu(self.conv2(x)))  # type: ignore
         x = x.view(batch_size, -1)  # type: ignore
-        return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            safe_softplus(self.var(x))))
+
+        loc = self.mean(x).expand(num_particles, batch_size, self.dim_states
+                                  ).permute(1, 2, 0)
+        cov = safe_softplus(self.var(x)).expand(
+            num_particles, batch_size, self.dim_states).permute(1, 2, 0)
+
+        return MultivariateNormal(loc, covariance_matrix=torch.diag_embed(cov))
 
 
 class LSTMRecognition(Recognition):
@@ -224,6 +241,7 @@ class LSTMRecognition(Recognition):
 
     def forward(self, *inputs: Tensor, **kwargs) -> MultivariateNormal:
         """Forward execution of the recognition model."""
+        num_particles = kwargs.get('num_particles', 1)
         output_sequence, input_sequence = inputs
 
         batch_size = output_sequence.shape[0]
@@ -238,5 +256,10 @@ class LSTMRecognition(Recognition):
                   torch.randn(num_layers, batch_size, self.lstm.hidden_size))
         out, hidden = self.lstm(io_sequence, hidden)
         x = out[:, -1]
-        return MultivariateNormal(self.mean(x), covariance_matrix=torch.diag_embed(
-            safe_softplus(self.var(x))))
+
+        loc = self.mean(x).expand(num_particles, batch_size, self.dim_states
+                                  ).permute(1, 2, 0)
+        cov = safe_softplus(self.var(x)).expand(
+            num_particles, batch_size, self.dim_states).permute(1, 2, 0)
+
+        return MultivariateNormal(loc, covariance_matrix=torch.diag_embed(cov))

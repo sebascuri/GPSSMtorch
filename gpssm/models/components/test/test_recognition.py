@@ -38,8 +38,8 @@ def test_recognition(model, dim_u, dim_y, dim_x):
     out_seq = torch.randn(32, 10, dim_y)
     out = recognition(out_seq, in_seq)
 
-    assert out.loc.shape == torch.Size([32, dim_x])
-    assert out.covariance_matrix.shape == torch.Size([32, dim_x, dim_x])
+    assert out.loc.shape == torch.Size([32, dim_x, 1])
+    assert out.covariance_matrix.shape == torch.Size([32, dim_x, 1, 1])
 
     other = recognition.copy()
     assert other is not recognition

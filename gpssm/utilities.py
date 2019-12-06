@@ -8,7 +8,8 @@ from torch import Tensor
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 from torch.distributions import Normal
-
+from gpytorch import settings
+from gpytorch.distributions import MultivariateNormal
 from tqdm import tqdm
 from typing import List
 from .dataset import get_dataset, Dataset
@@ -169,7 +170,7 @@ def make_dir(name):
         pass
 
 
-def approximate_with_normal(predicted_outputs: List[Normal]) -> Normal:
+def approximate_with_normal(predicted_outputs: List[MultivariateNormal]) -> Normal:
     """Approximate a particle distribution with a Normal by moment matching."""
     sequence_length = len(predicted_outputs)
     batch_size, dim_outputs, _ = predicted_outputs[0].loc.shape
@@ -179,7 +180,8 @@ def approximate_with_normal(predicted_outputs: List[Normal]) -> Normal:
     for t, y_pred in enumerate(predicted_outputs):
         # Collapse particles!
         output_loc[:, t, :] = y_pred.loc.mean(dim=-1)
-        output_cov[:, t, :] = y_pred.scale.mean(dim=-1) + y_pred.loc.var(dim=-1)
+        output_cov[:, t, :] = torch.diagonal(y_pred.covariance_matrix, dim1=-1, dim2=-2
+                                             ).mean(dim=-1) + y_pred.loc.var(dim=-1)
     return Normal(output_loc, output_cov)
 
 
@@ -235,14 +237,13 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
             # Evaluate
             if print_iter is not None and (iter_ % print_iter) == 0:
                 with torch.no_grad():
-                    # model.eval()
+                    model.eval()
                     inputs, outputs, _ = test_set[0]
                     inputs, outputs = inputs.unsqueeze(0), outputs.unsqueeze(0)
-                    predicted_outputs, _ = model.forward(outputs, inputs, print=True)
                     _evaluate(model, outputs, inputs, output_scale, evaluator,
                               experiment, 'trainiter_{}'.format(iter_))
                     dump(str(iter_) + str(evaluator) + '\n', train_file, 'a+')
-                    # model.train()
+                    model.train()
 
         print(model)
 
@@ -281,20 +282,21 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment, key: st
         for inputs, outputs, states in dataloader:
             _evaluate(model, outputs, inputs, output_scale, evaluator, experiment,
                       key)
-        print('Sequence Length: {}. {}'.format(dataset.sequence_length, evaluator))
     return evaluator
 
 
 def _evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Tensor,
               evaluator: Evaluator, experiment: Experiment, key: str) -> None:
-    predicted_outputs, _ = model(outputs, inputs)
-
+    with settings.fast_pred_samples(state=True), settings.fast_pred_var(state=True):
+        # predicted_outputs = model.predict(outputs, inputs)
+        predicted_outputs, _ = model.forward(outputs, inputs)
     collapsed_predicted_outputs = approximate_with_normal(predicted_outputs)
 
     mean = collapsed_predicted_outputs.loc.detach().numpy()
     scale = collapsed_predicted_outputs.scale.detach().numpy()
 
     evaluator.evaluate(collapsed_predicted_outputs, outputs, output_scale)
+    print(str(evaluator))
 
     fig = plot_pred(mean[-1].T, np.sqrt(scale[-1]).T, outputs[-1].numpy().T)
     fig.axes[0].set_title('{} {} {} Prediction'.format(

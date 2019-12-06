@@ -280,4 +280,4 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
 
     def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model."""
-        return self.variational_strategy.kl_divergence().sum()
+        return self.variational_strategy.kl_divergence().sum(dim=1).mean()

@@ -8,12 +8,19 @@ from .components.variational import ApproxCholeskyVariationalDistribution as App
 from .components.variational import CholeskyMeanVariationalDistribution as CholMeanVaDi
 from .components.variational import DeltaVariationalDistribution as DeltaVaDi
 from .components.variational import CholeskySampleVariationalDistribution as CholSamVaDi
+from gpytorch.distributions import MultivariateNormal
 from gpytorch.means import ConstantMean, ZeroMean, LinearMean, Mean
 from gpytorch.kernels import ScaleKernel, RBFKernel, MaternKernel, LinearKernel, Kernel
 from typing import Tuple, Type
 
 __author__ = 'Sebastian Curi'
-__all__ = ['init_emissions', 'init_transitions', 'init_dynamics', 'init_recognition']
+__all__ = ['init_emissions', 'init_transitions', 'init_dynamics', 'init_recognition',
+           'diagonal_covariance']
+
+
+def diagonal_covariance(q: MultivariateNormal) -> MultivariateNormal:
+    """Make the particles independent of each other."""
+    return MultivariateNormal(q.loc, torch.diag_embed(q.lazy_covariance_matrix.diag()))
 
 
 def init_recognition(dim_outputs: int, dim_inputs: int, dim_states: int,
@@ -180,7 +187,7 @@ def _parse_mean(input_size: int, dim_outputs: int = 1, kind: str = 'zero') -> Me
     elif kind.lower() == 'zero':
         mean = ZeroMean()
     elif kind.lower() == 'linear':
-        mean = LinearMean(input_size=input_size, batch_size=dim_outputs)
+        mean = LinearMean(input_size=input_size, batch_shape=torch.Size([dim_outputs]))
     else:
         raise NotImplementedError('Mean function {} not implemented.'.format(kind))
     return mean

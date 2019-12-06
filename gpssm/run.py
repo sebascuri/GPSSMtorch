@@ -32,7 +32,7 @@ def main(experiment: Experiment, num_threads: int = 2):
     batch_size = opt_config.get('batch_size', 10)
     num_epochs = None if 'max_iter' in opt_config else opt_config.get('num_epochs', 1)
     max_iter = opt_config.get('max_iter', 1)
-    learning_rate = opt_config.get('learning_rate', 0.1)
+    learning_rate = opt_config.get('learning_rate', 0.01)
     eval_length = opt_config.get('eval_length', [None])
 
     # Model Parameters
@@ -105,17 +105,24 @@ if __name__ == "__main__":
         configs = {'experiment': {'name': 'experiments/sample/'},
                    'print_iter': 50,
                    'model': {'dim_states': 4,
-                             'num_particles': 10,
-                             'forward': {'kernel': {'shared': True,
-                                                    'outputscale': 0.01},
-                                         'inducing_points': {'scale': 4.0}
-                                         },
-                             'emissions': {'variance': 0.001}
+                             'num_particles': 16,
+                             'forward': {
+                                 'mean': {'kind': 'zero'},
+                                 'kernel': {'shared': True,
+                                            'outputscale': 0.25,
+                                            'lengthscale': 2.},
+                                 'inducing_points': {
+                                     'strategy': 'uniform',
+                                     'scale': 4.0,
+                                     'learnable': False,
+                                     'number_points': 20}
                              },
-                   'dataset': {'sequence_length': 40},
+                             'emissions': {'variance': .1, 'learnable': True}
+                             },
+                   'dataset': {'sequence_length': 50},
                    'optimization': {'eval_length': [None],
                                     'max_iter': 300}}
-        model = 'PRSSMDiag'
+        model = 'CBFSSM'
         dataset = 'Actuator'
 
     main(Experiment(model, dataset, args.seed, configs), args.num_threads)
