@@ -48,6 +48,7 @@ class Dataset(data.TensorDataset):
         assert outputs.ndim == 3, 'Outputs shape is [n_experiment, time, dim]'
         assert self.dim_outputs == outputs.shape[2]
 
+        self.train = train
         self.num_experiments, self.experiment_length, _ = outputs.shape
         if sequence_length is None:
             sequence_length = min(20, self.experiment_length)
@@ -97,8 +98,9 @@ class Dataset(data.TensorDataset):
         string += 'sequence length: {} \n'.format(
             self.tensors[0].shape[1]
         )
-        string += 'train_samples: {} \ntrain_sequences: {} \n'.format(
-            self.experiment_length, self.tensors[0].shape[0]
+        key = 'train' if self.train else 'test'
+        string += '{}_samples: {} \n{}_sequences: {} \n'.format(
+            key, self.experiment_length, key, self.tensors[0].shape[0]
         )
         return string
 
@@ -170,7 +172,7 @@ class Actuator(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs, states=states,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class BallBeam(Dataset):
@@ -212,7 +214,7 @@ class BallBeam(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class Drive(Dataset):
@@ -257,7 +259,7 @@ class Drive(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class Dryer(Dataset):
@@ -299,7 +301,7 @@ class Dryer(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class Flutter(Dataset):
@@ -341,7 +343,7 @@ class Flutter(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class GasFurnace(Dataset):
@@ -383,7 +385,7 @@ class GasFurnace(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class Tank(Dataset):
@@ -424,7 +426,7 @@ class Tank(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class Sarcos(Dataset):
@@ -475,7 +477,7 @@ class Sarcos(Dataset):
             outputs = subsampled_data[split_idx:, :, 0:7]
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class NonLinearSpring(Dataset):
@@ -513,7 +515,7 @@ class NonLinearSpring(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs, states=states,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class RoboMove(Dataset):
@@ -552,7 +554,7 @@ class RoboMove(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs, states=states,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class RoboMoveSimple(Dataset):
@@ -591,7 +593,7 @@ class RoboMoveSimple(Dataset):
 
         super().__init__(inputs=inputs, outputs=outputs, states=states,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
 
 class KinkFunction(Dataset):
@@ -672,7 +674,7 @@ class KinkFunction(Dataset):
 
         super().__init__(outputs=outputs, states=states,
                          sequence_length=sequence_length,
-                         sequence_stride=sequence_stride)
+                         sequence_stride=sequence_stride, train=train)
 
     @staticmethod
     def f(x: np.ndarray, _: np.ndarray = None) -> np.ndarray:
