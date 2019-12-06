@@ -5,7 +5,7 @@ import torch.optim
 from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
-from gpssm.utilities import train, evaluate, Experiment, save, dump, plot_transitions
+from gpssm.utilities import train, evaluate, Experiment, save, dump
 import math
 
 
@@ -38,24 +38,32 @@ def main(experiment: Experiment, num_threads: int = 2):
     # Model Parameters
     model_config = experiment.configs.get('model', {})
 
-    # Initialize dataset, model, and optimizer.
+    # Initialize dataset
     dataset = get_dataset(experiment.dataset)
+    train_set = dataset(train=True, **dataset_config)
+    test_set = dataset(train=False, **dataset_config)
+    test_set.sequence_length = test_set.experiment_length
+    print(train_set)
+    print(test_set)
+
+    # Initialize model
     model = get_model(experiment.model, dataset.dim_outputs, dataset.dim_inputs,
                       **model_config)
     dump(str(model), experiment.fig_dir + 'model_initial.txt')
+
+    # Initialize optimizer
     optimizer = torch.optim.Adam(model.properties(), lr=learning_rate)
 
     # Train.
-    train_set = dataset(train=True, **dataset_config)
-    print(train_set)
     model.dataset_size = len(train_set)
-    train_loader = DataLoader(train_set,
-                              sampler=torch.utils.data.RandomSampler(train_set),
-                              batch_size=batch_size)
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True
+                              # sampler=torch.utils.data.RandomSampler(train_set),
+                              )
     if num_epochs is None:
         num_epochs = max(1, math.floor(max_iter * batch_size / len(train_set)))
 
-    losses = train(model, train_loader, optimizer, num_epochs, experiment)
+    losses = train(model, train_loader, optimizer, num_epochs, experiment,
+                   test_set=test_set)
     save(experiment, model=model)
     dump(str(model), experiment.fig_dir + 'model_final_{}.txt'.format(experiment.seed))
     dump(str(losses), experiment.fig_dir + 'losses_{}.txt'.format(experiment.seed))
@@ -76,9 +84,6 @@ def main(experiment: Experiment, num_threads: int = 2):
             dump(str(evaluator), experiment.fig_dir + '{}_results_{}.txt'.format(
                 eval_key, experiment.seed))
 
-    if 'kink' in experiment.dataset:
-        plot_transitions(model, experiment, dataset.f)
-
 
 if __name__ == "__main__":
     import argparse
@@ -98,13 +103,19 @@ if __name__ == "__main__":
         dataset = configs.get('dataset').pop('name')
     else:
         configs = {'experiment': {'name': 'experiments/sample/'},
-                   'print_iter': 20,
+                   'print_iter': 50,
                    'model': {'dim_states': 4,
-                             'forward': {'kernel': {'shared': True}}},
-                   'dataset': {'sequence_length': 50},
+                             'num_particles': 10,
+                             'forward': {'kernel': {'shared': True,
+                                                    'outputscale': 0.01},
+                                         'inducing_points': {'scale': 4.0}
+                                         },
+                             'emissions': {'variance': 0.001}
+                             },
+                   'dataset': {'sequence_length': 40},
                    'optimization': {'eval_length': [None],
-                                    'max_iter': 50}}
-        model = 'PRSSM'
+                                    'max_iter': 300}}
+        model = 'PRSSMDiag'
         dataset = 'Actuator'
 
     main(Experiment(model, dataset, args.seed, configs), args.num_threads)

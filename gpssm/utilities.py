@@ -1,5 +1,6 @@
 """Utilities for training and evaluating."""
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import os
 import pickle
@@ -9,15 +10,17 @@ from torch.utils.data import DataLoader
 from torch.distributions import Normal
 
 from tqdm import tqdm
-from typing import List, Callable
+from typing import List
 from .dataset import get_dataset, Dataset
 from .models import get_model, SSM
 from .plotters import plot_pred, plot_2d, plot_transition, plot_loss
 from collections import namedtuple
 
+from gpssm.dataset.dataset import KinkFunction
+
 __author__ = 'Sebastian Curi'
 __all__ = ['Experiment', 'approximate_with_normal', 'train', 'evaluate', 'save', 'load',
-           'make_dir', 'dump', 'plot_transitions']
+           'make_dir', 'dump']
 
 
 class Evaluator(dict):
@@ -181,7 +184,7 @@ def approximate_with_normal(predicted_outputs: List[Normal]) -> Normal:
 
 
 def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: int,
-          experiment: Experiment) -> List[float]:
+          experiment: Experiment, test_set: Dataset) -> List[float]:
     """Train a model.
 
     Parameters
@@ -196,6 +199,8 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
         Number of epochs.
     experiment: Experiment.
         Experiment meta-data.
+    test_set: Dataset
+        Dataset to evaluate model on.
 
     Returns
     -------
@@ -219,18 +224,25 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
             optimizer.zero_grad()
 
             # Compute the loss.
-            print_flag = print_iter is not None and (iter_ % print_iter) == 0
-            predicted_outputs, loss = model.forward(outputs, inputs, print=True)
-            if print_flag:
-                _evaluate(predicted_outputs, outputs, output_scale, evaluator,
-                          experiment, 'trainiter_{}'.format(iter_))
-                dump(str(evaluator) + '\n', train_file, 'a+')
+            predicted_outputs, loss = model.forward(outputs, inputs)
 
             # Back-propagate
             loss.backward()
             optimizer.step()
             losses.append(loss.item())
             iter_ += 1
+
+            # Evaluate
+            if print_iter is not None and (iter_ % print_iter) == 0:
+                with torch.no_grad():
+                    # model.eval()
+                    inputs, outputs, _ = test_set[0]
+                    inputs, outputs = inputs.unsqueeze(0), outputs.unsqueeze(0)
+                    predicted_outputs, _ = model.forward(outputs, inputs, print=True)
+                    _evaluate(model, outputs, inputs, output_scale, evaluator,
+                              experiment, 'trainiter_{}'.format(iter_))
+                    dump(str(iter_) + str(evaluator) + '\n', train_file, 'a+')
+                    # model.train()
 
         print(model)
 
@@ -239,6 +251,7 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
         experiment.model, experiment.dataset))
     fig.show()
     fig.savefig('{}training_loss.png'.format(experiment.fig_dir))
+    plt.close(fig)
 
     return losses
 
@@ -266,15 +279,16 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment, key: st
     with torch.no_grad():
         model.eval()
         for inputs, outputs, states in dataloader:
-            predicted_outputs, _ = model(outputs, inputs)
-            _evaluate(predicted_outputs, outputs, output_scale, evaluator, experiment,
+            _evaluate(model, outputs, inputs, output_scale, evaluator, experiment,
                       key)
         print('Sequence Length: {}. {}'.format(dataset.sequence_length, evaluator))
     return evaluator
 
 
-def _evaluate(predicted_outputs: List[Normal], outputs: Tensor, output_scale: Tensor,
+def _evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Tensor,
               evaluator: Evaluator, experiment: Experiment, key: str) -> None:
+    predicted_outputs, _ = model(outputs, inputs)
+
     collapsed_predicted_outputs = approximate_with_normal(predicted_outputs)
 
     mean = collapsed_predicted_outputs.loc.detach().numpy()
@@ -287,37 +301,31 @@ def _evaluate(predicted_outputs: List[Normal], outputs: Tensor, output_scale: Te
         experiment.model, experiment.dataset, key.capitalize()))
     fig.show()
     fig.savefig('{}prediction_{}.png'.format(experiment.fig_dir, key))
+    plt.close(fig)
 
-    if 'Robomove' in experiment.dataset.lower():
+    if 'robomove' in experiment.dataset.lower():
         fig = plot_2d(mean[-1].T, outputs[-1].numpy().T)
         fig.axes[0].set_title('{} {} {} Prediction'.format(
             experiment.model, experiment.dataset, key.capitalize()))
         fig.show()
         fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
+        plt.close(fig)
 
+    if 'kink' in experiment.dataset.lower():
+        gp = model.forward_model
+        transition = model.transitions
+        x = torch.arange(-3, 1, 0.1)
+        true_next_x = KinkFunction.f(x.numpy())
+        pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
 
-def plot_transitions(model: SSM, experiment: Experiment, f: Callable) -> None:
-    """Plot true and predicted transition function.
-
-    Parameters
-    ----------
-    model: SSM.
-    experiment: Experiment.
-    f: callable.
-    """
-    gp = model.forward_model
-    transition = model.transitions
-    x = torch.arange(-3, 1, 0.1)
-    true_next_x = f(x.numpy())
-    pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
-
-    fig = plot_transition(
-        x.numpy(), true_next_x, pred_next_x.loc[-1, -1].numpy(),
-        torch.diag(pred_next_x.covariance_matrix[-1, -1]).sqrt().numpy())
-    fig.axes[0].set_title('{} {} Learned Function'.format(
-        experiment.model, experiment.dataset))
-    fig.show()
-    fig.savefig('{}transition.png'.format(experiment.fig_dir))
+        fig = plot_transition(
+            x.numpy(), true_next_x, pred_next_x.loc[-1, -1].numpy(),
+            torch.diag(pred_next_x.covariance_matrix[-1, -1]).sqrt().numpy())
+        fig.axes[0].set_title('{} {} Learned Function'.format(
+            experiment.model, experiment.dataset))
+        fig.show()
+        fig.savefig('{}transition.png'.format(experiment.fig_dir))
+        plt.close(fig)
 
 
 def save(experiment: Experiment, **kwargs) -> None:
