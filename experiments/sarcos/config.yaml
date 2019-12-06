@@ -1,27 +1,28 @@
 experiment:
   name: sarcos
-  splits: [['model', 'name'], ['dataset', 'sequence_length']]
+  splits: [['model', 'name']]
 
 dataset:
   name: Sarcos
-  sequence_length: [10, 20, 50, 100]
+  sequence_length: 100
   sequence_stride: 1
 
 optimization:
   learning_rate: 0.05
   batch_size: 32
-  num_epochs: 10
+  num_epochs: 1
   eval_length: # Evaluation lengths.
     - 100
 
-evaluation:
-  plots: ['training_loss', 'prediction']
-  length: []  # Here add extra evaluation lengths.
+plots: ['training_loss', 'prediction']
 
 model:
-  name: ['PRSSM', 'CBFSSM', 'VCDT']
+  name:
+    - 'CBFSSM'
+    - 'PRSSM'
+    - 'VCDT'
   dim_states: 14
-  num_particles: 50
+  num_particles: 25
   loss_key: 'elbo'
   k_factor: 1.0  # This is the soft conditioning factor.
   loss_factors:  # These factors multiply each term of the ELBO.
@@ -35,13 +36,13 @@ model:
     length: 1
     kind: 'output'  # output, zero, nn, conv, lstm, bi-lstm.
     variance: 0.0001
-    learnable: False
+    learnable: True
   emissions:
     variance: 0.0025
-    learnable: False
+    learnable: True
   transitions:
     variance: 0.0002
-    learnable: False
+    learnable: True
   forward:
     mean:
       kind: 'zero'  # zero, constant, linear.
@@ -49,7 +50,7 @@ model:
       shared: True
       kind: 'rbf'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
       ard_num_dims:  # if empty will automatically select dim_states + dim_inputs.
-      outputscale: 0.25
+      outputscale: 0.1
       lengthscale: 2.0
       learn_outputscale: True
       learn_lengthscale: True
@@ -59,6 +60,7 @@ model:
       scale: 6.0
       learnable: True
     variational_distribution:
+      kind: 'full'  # Strategies: full, mean, sample, delta
       learn_mean: True
       mean: 0.0
       learn_var: True
