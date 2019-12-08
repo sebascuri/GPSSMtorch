@@ -194,22 +194,20 @@ def approximate_with_normal(predicted_outputs: List[MultivariateNormal]) -> Norm
     return Normal(output_loc, output_cov)
 
 
-def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: int,
-          experiment: Experiment, test_set: Dataset) -> List[float]:
+def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
+          train_set: Dataset, test_set: Dataset) -> List[float]:
     """Train a model.
 
     Parameters
     ----------
     model: GPSSM.
         Model to train.
-    dataloader: DataLoader.
-        Loader to iterate data.
     optimizer: Optimizer.
         Model Optimizer.
-    num_epochs: int.
-        Number of epochs.
     experiment: Experiment.
         Experiment meta-data.
+    train_set: Dataset
+        Dataset to train the model on.
     test_set: Dataset
         Dataset to evaluate model on.
 
@@ -218,18 +216,32 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
     losses: list of int.
         List of losses encountered during training.
     """
+    dump(str(model), experiment.fig_dir + 'model_initial.txt')
+
     losses = []
-    best_rmse = float('inf')
-    output_scale = torch.tensor(test_set.output_normalizer.sd).float()
-    model_file = experiment.log_dir + 'model_{}.pt'.format(experiment.seed)
     evaluator = Evaluator()
+
+    best_rmse = float('inf')
+    output_scale = torch.tensor(train_set.output_normalizer.sd).float()
+    model_file = experiment.log_dir + 'model_{}.pt'.format(experiment.seed)
+    opt_config = experiment.configs.get('optimization', {})
+    batch_size = opt_config.get('batch_size', 10)
+    num_epochs = None if 'max_iter' in opt_config else opt_config.get('num_epochs', 1)
+    max_iter = opt_config.get('max_iter', 1)
+
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
     train_file = '{}train_epoch.txt'.format(experiment.fig_dir)
     if os.path.exists(train_file):
         os.remove(train_file)
 
+    if num_epochs is None:
+        num_epochs = max(1, np.floor(max_iter * batch_size / len(train_set)))
+
     for i_epoch in tqdm(range(num_epochs)):
-        for i_iter, (inputs, outputs) in enumerate(tqdm(dataloader)):
+        model.train()
+        for i_iter, (inputs, outputs) in enumerate(tqdm(train_loader)):
             # Zero the gradients of the Optimizer
             optimizer.zero_grad()
 
@@ -244,58 +256,51 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
         # Evaluate
         with torch.no_grad():
             model.eval()
-            inputs, outputs = test_set[0]
-            inputs, outputs = inputs.unsqueeze(0), outputs.unsqueeze(0)
-            _evaluate(model, outputs, inputs, output_scale, evaluator,
-                      experiment, 'epoch_{}'.format(i_epoch))
-            dump(str(i_epoch + 1) + ' ' + evaluator.last + '\n', train_file, 'a+')
-            if evaluator['rmse'][-1] < best_rmse:
-                best_rmse = evaluator['rmse'][-1]
-                torch.save(model.state_dict(), model_file)
-            model.train()
+            for inputs, outputs in tqdm(test_loader):
+                evaluate(model, outputs, inputs, output_scale, evaluator,
+                         experiment, 'epoch_{}'.format(i_epoch))
+                dump(str(i_epoch) + ' ' + evaluator.last + '\n', train_file, 'a+')
+                if evaluator['rmse'][-1] < best_rmse:
+                    best_rmse = evaluator['rmse'][-1]
+                    torch.save(model.state_dict(), model_file)
+
         print(model)
 
+    # Plot Losses.
+    dump(str(losses), experiment.fig_dir + 'losses_{}.txt'.format(experiment.seed))
     fig = plot_loss(losses, ylabel=model.loss_key.upper())
     fig.gca().set_title('{} {} Training Loss'.format(
         experiment.model, experiment.dataset))
     fig.show()
     fig.savefig('{}training_loss.png'.format(experiment.fig_dir))
     plt.close(fig)
-    model.load_state_dict(torch.load(model_file))
 
+    # ReLoad best model.
+    model.load_state_dict(torch.load(model_file))
+    dump(str(model), experiment.fig_dir + 'model_final_{}.txt'.format(experiment.seed))
+
+    # Evaluate Test set.
+    model.eval()
+    for inputs, outputs in tqdm(test_loader):
+        evaluate(model, outputs, inputs, output_scale, evaluator,
+                 experiment, 'Test')
+        dump('Test ' + evaluator.last + '\n', train_file, 'a+')
+
+    # Evaluate Train set.
+    train_set.sequence_length = test_set.sequence_length
+    train_eval_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False)
+    for inputs, outputs in tqdm(train_eval_loader):
+        evaluate(model, outputs, inputs, output_scale, evaluator,
+                 experiment, 'Train')
+        dump('Train ' + evaluator.last + '\n', train_file, 'a+')
+
+    save(experiment, evaluator=evaluator)
     return losses
 
 
-def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment, key: str = ''
-             ) -> Evaluator:
-    """Evaluate a model.
-
-    Parameters
-    ----------
-    model: GPSSM.
-        Model to train.
-    dataloader: DataLoader.
-        Loader to iterate data.
-    experiment: Experiment.
-        Experiment meta-data.
-    key: str.
-        Key to end files with.
-
-    """
-    dataset = dataloader.dataset  # type: Dataset  # type: ignore
-    output_scale = torch.tensor(dataset.output_normalizer.sd).float()
-    evaluator = Evaluator()
-
-    with torch.no_grad():
-        model.eval()
-        for inputs, outputs in dataloader:
-            _evaluate(model, outputs, inputs, output_scale, evaluator, experiment,
-                      key)
-    return evaluator
-
-
-def _evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Tensor,
-              evaluator: Evaluator, experiment: Experiment, key: str) -> None:
+def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Tensor,
+             evaluator: Evaluator, experiment: Experiment, key: str) -> None:
+    """Evaluate outputs"""
     with settings.fast_pred_samples(state=True), settings.fast_pred_var(state=True):
         # predicted_outputs = model.predict(outputs, inputs)
         predicted_outputs, _ = model.forward(outputs, inputs)

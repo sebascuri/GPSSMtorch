@@ -2,11 +2,9 @@
 
 import torch
 import torch.optim
-from torch.utils.data import DataLoader
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
-from gpssm.utilities import train, evaluate, Experiment, save, dump
-import math
+from gpssm.utilities import train, Experiment, dump
 
 
 def main(experiment: Experiment, num_threads: int = 2):
@@ -29,11 +27,8 @@ def main(experiment: Experiment, num_threads: int = 2):
 
     # Optimization Parameters
     opt_config = experiment.configs.get('optimization', {})
-    batch_size = opt_config.get('batch_size', 10)
-    num_epochs = None if 'max_iter' in opt_config else opt_config.get('num_epochs', 1)
-    max_iter = opt_config.get('max_iter', 1)
     learning_rate = opt_config.get('learning_rate', 0.01)
-    eval_length = opt_config.get('eval_length', [None])
+    eval_length = opt_config.get('eval_length', None)
 
     # Model Parameters
     model_config = experiment.configs.get('model', {})
@@ -42,47 +37,20 @@ def main(experiment: Experiment, num_threads: int = 2):
     dataset = get_dataset(experiment.dataset)
     train_set = dataset(train=True, **dataset_config)
     test_set = dataset(train=False, **dataset_config)
-    test_set.sequence_length = test_set.experiment_length
+    if eval_length is None:
+        test_set.sequence_length = test_set.experiment_length
     print(train_set)
     print(test_set)
 
     # Initialize model
     model = get_model(experiment.model, dataset.dim_outputs, dataset.dim_inputs,
                       **model_config)
-    dump(str(model), experiment.fig_dir + 'model_initial.txt')
-
     # Initialize optimizer
     optimizer = torch.optim.Adam(model.properties(), lr=learning_rate)
 
-    # Train.
+    # Train & Evaluate.
     model.dataset_size = len(train_set)
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True
-                              # sampler=torch.utils.data.RandomSampler(train_set),
-                              )
-    if num_epochs is None:
-        num_epochs = max(1, math.floor(max_iter * batch_size / len(train_set)))
-
-    losses = train(model, train_loader, optimizer, num_epochs, experiment,
-                   test_set=test_set)
-    save(experiment, model=model)
-    dump(str(model), experiment.fig_dir + 'model_final_{}.txt'.format(experiment.seed))
-    dump(str(losses), experiment.fig_dir + 'losses_{}.txt'.format(experiment.seed))
-
-    # Evaluate.
-    for key in ['train', 'test']:
-        dataset_ = dataset(train=key == 'train', **dataset_config)
-        model.dataset_size = len(dataset_)
-        for seq_len in eval_length:
-            if seq_len is None:
-                seq_len = dataset_.experiment_length
-            eval_key = '{}_{}'.format(key, seq_len)
-
-            dataset_.sequence_length = seq_len
-            loader = DataLoader(dataset_, batch_size=batch_size, shuffle=False)
-            evaluator = evaluate(model, loader, experiment, eval_key)
-            save(experiment, eval_train=evaluator)
-            dump(str(evaluator), experiment.fig_dir + '{}_results_{}.txt'.format(
-                eval_key, experiment.seed))
+    train(model, optimizer, experiment, train_set=train_set, test_set=test_set)
 
 
 if __name__ == "__main__":
@@ -99,30 +67,39 @@ if __name__ == "__main__":
     if args.config_file is not None:
         with open(args.config_file, 'r') as file:
             configs = yaml.load(file, Loader=yaml.SafeLoader)
-        model = configs.get('model').pop('name')
-        dataset = configs.get('dataset').pop('name')
+        model_ = configs.get('model').pop('name')
+        dataset_ = configs.get('dataset').pop('name')
     else:
         configs = {'experiment': {'name': 'experiments/sample/'},
-                   'print_iter': 50,
                    'model': {'dim_states': 4,
-                             'num_particles': 16,
+                             'num_particles': 50,
+                             'loss_factors': {'kl_u': .5, 'kl_conditioning': 1.},
+                             'recognition': {'kind': 'output', 'length': 1,
+                                             'variance': 0.1 ** 2},
                              'forward': {
                                  'mean': {'kind': 'zero'},
                                  'kernel': {'shared': True,
-                                            'outputscale': 0.25,
+                                            'outputscale': .5 ** 2,
                                             'lengthscale': 2.},
                                  'inducing_points': {
                                      'strategy': 'uniform',
                                      'scale': 4.0,
-                                     'learnable': False,
-                                     'number_points': 20}
+                                     'learnable': True,
+                                     'number_points': 20},
+                                 'variational_distribution': {
+                                     'mean': 0.05 ** 2,
+                                     'variance': 0.01 ** 2,
+                                 }
                              },
-                             'emissions': {'variance': .1, 'learnable': True}
+                             'emissions': {'variance': 1., 'learnable': True},
+                             'transitions': {'variance': 0.002 ** 2, 'learnable': True}
                              },
                    'dataset': {'sequence_length': 50},
-                   'optimization': {'eval_length': [None],
-                                    'max_iter': 300}}
-        model = 'CBFSSM'
-        dataset = 'Actuator'
+                   'optimization': {'learning_rate': 0.1,
+                                    'batch_size': 32,
+                                    'num_epochs': 50}
+                   }
+        model_ = 'PRSSM'
+        dataset_ = 'Actuator'
 
-    main(Experiment(model, dataset, args.seed, configs), args.num_threads)
+    main(Experiment(model_, dataset_, args.seed, configs), args.num_threads)

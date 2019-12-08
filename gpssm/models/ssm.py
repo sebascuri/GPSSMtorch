@@ -8,7 +8,7 @@ from torch.distributions import kl_divergence
 from typing import List, Tuple
 from gpytorch.distributions import MultivariateNormal
 
-from .components.dynamics import Dynamics, IdentityDynamics
+from .components.dynamics import Dynamics, ZeroDynamics
 from .components.emissions import Emissions
 from .components.transitions import Transitions
 from .components.recognition_model import Recognition
@@ -66,7 +66,7 @@ class SSM(nn.Module, ABC):
         self.dim_states = forward_model.num_outputs
         self.forward_model = forward_model
         if backward_model is None:
-            backward_model = IdentityDynamics(self.dim_states - emissions.dim_outputs)
+            backward_model = ZeroDynamics(self.dim_states - emissions.dim_outputs)
         self.backward_model = backward_model
 
         self.transitions = transitions
@@ -146,8 +146,8 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # PERFORM Backward Pass #
         ################################################################################
-        if self.training:
-            output_distribution = self.backward(output_sequence, input_sequence)
+        # if self.training:
+        #     output_distribution = self.backward(output_sequence, input_sequence)
 
         ################################################################################
         # Initial State #
@@ -169,8 +169,8 @@ class SSM(nn.Module, ABC):
         ################################################################################
 
         # entropy = torch.tensor(0.)
-        if self.training:
-            output_distribution.pop(0)
+        # if self.training:
+        #     output_distribution.pop(0)
             # entropy += y_tilde.entropy().mean() / sequence_length
 
         y = output_sequence[:, 0].expand(num_particles, batch_size, dim_outputs
@@ -197,14 +197,11 @@ class SSM(nn.Module, ABC):
             ############################################################################
             # CONDITION Next State #
             ############################################################################
-            if self.training:
-                true_y = output_sequence[:, t + 1].expand(
-                    num_particles, batch_size, dim_inputs).permute(1, 2, 0)
-                y_tilde = output_distribution.pop(0)
-                assert torch.all(true_y == y_tilde.loc[:, :1])
-                p_next_state = next_state
-                next_state = self._condition(next_state, y_tilde)
-                kl_cond += kl_divergence(next_state, p_next_state).mean()
+            # if self.training:
+            #     y_tilde = output_distribution.pop(0)
+            #     p_next_state = next_state
+            #     next_state = self._condition(next_state, y_tilde)
+            #     kl_cond += kl_divergence(next_state, p_next_state).mean()
             ############################################################################
             # RESAMPLE State #
             ############################################################################
@@ -234,10 +231,15 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # kl_uf = self.forward_model.kl_divergence() / sequence_length
         # kl_ub = self.backward_model.kl_divergence() / sequence_length
-        factor = batch_size / self.dataset_size
-        kl_uf = self.forward_model.kl_divergence() * self.loss_factors['kl_u'] * factor
-        kl_ub = self.backward_model.kl_divergence() * factor
+        factor = 1  # batch_size / self.dataset_size
+        kl_uf = self.forward_model.kl_divergence()
+        if self.backward_model is not None:
+            kl_ub = self.backward_model.kl_divergence()
+        else:
+            kl_ub = torch.tensor(0.)
         kl_cond = kl_cond * self.loss_factors['kl_conditioning'] * factor
+        kl_ub = kl_ub * sequence_length * self.loss_factors['kl_u'] * factor
+        kl_uf = kl_uf * sequence_length * self.loss_factors['kl_u'] * factor
 
         if self.loss_key.lower() == 'loglik':
             loss = -log_lik
@@ -265,6 +267,7 @@ class SSM(nn.Module, ABC):
         dim_states = self.dim_states
         num_particles = self.num_particles
         dim_delta = dim_states - dim_outputs
+        shape = (batch_size, dim_delta, num_particles)
 
         ################################################################################
         # Final Pseudo Measurement #
@@ -272,65 +275,44 @@ class SSM(nn.Module, ABC):
         y = output_sequence[:, -1].expand(num_particles, -1, -1).permute(1, 2, 0)
         x_tilde_obs = self.emissions(y)
 
-        loc = torch.cat((x_tilde_obs.loc,
-                         torch.zeros(batch_size, dim_delta, num_particles)), dim=1)
+        loc = torch.cat((x_tilde_obs.loc, torch.zeros(*shape)), dim=1)
 
-        scale = torch.cat((x_tilde_obs.covariance_matrix, torch.diag_embed(
-            torch.ones(batch_size, dim_delta, num_particles))), dim=1)
+        cov = torch.cat((x_tilde_obs.covariance_matrix,
+                         torch.diag_embed(torch.ones(*shape))), dim=1)
 
-        x_tilde = MultivariateNormal(loc, scale)
+        x_tilde = MultivariateNormal(loc, cov)
         outputs = [x_tilde]
 
         for t in reversed(range(sequence_length - 1)):
-            # y = output_sequence[:, t].expand(num_particles, -1, -1).permute(1, 2, 0)
-            # x_tilde_obs = self.emissions(y)
-            #
-            # loc = torch.cat((x_tilde_obs.loc,
-            #                  torch.zeros(batch_size, dim_delta, num_particles)),dim=1)
-            #
-            # scale = torch.cat((x_tilde_obs.covariance_matrix, torch.diag_embed(
-            #     torch.ones(batch_size, dim_delta, num_particles))), dim=1)
-            #
-            # x_tilde = MultivariateNormal(loc, scale)
-            # outputs.append(x_tilde)
             ############################################################################
             # PREDICT Previous pseudo-measurement #
             ############################################################################
             y = output_sequence[:, t].expand(num_particles, -1, -1).permute(1, 2, 0)
             x_tilde_obs = self.emissions(y)
-
-            # Input: Torch (batch_size x dim_inputs x num_particles)
             u = input_sequence[:, t].expand(num_particles, batch_size, dim_inputs)
-            u = u.permute(1, 2, 0)  # Move last component to end.
+            u = u.permute(1, 2, 0)
 
-            # \hat{Y}: Torch (batch_size x dim_states + dim_inputs x num_particles)
-
-            # Here change the order of y_tilde for identity dynamics (those that return
-            # the first dim_output states). The reason for this is that we already
-            # append the y_ from emissions in the first components.
-            # We can check this by comparing before computing next_y_tilde_d
-            # loc[0, :, 0], y_.loc[0, :, 0], y_tilde[0, :, 0]
+            # Here change the order of y_tilde for identity dynamics (those that
+            # return the first dim_output states). The reason for this is that we
+            # already append the y_ from emissions in the first components.
+            # We can check this by comparing before computing next_x_tilde
+            # loc[0, :, 0], x.loc[0, :, 0], x_tilde[0, :, 0]
 
             delta_idx = torch.arange(dim_outputs, dim_states)
             idx = torch.cat((delta_idx, torch.arange(dim_outputs)))
-            x_tilde_samples = x_tilde.rsample()[:, idx]  # Reshape
+            x_tilde_samples = x_tilde.rsample()[:, idx]  # exchange indexes
             x_tilde_u = torch.cat((x_tilde_samples, u), dim=1)
             next_x_tilde = self.backward_model(x_tilde_u)
+            next_x_tilde.loc += x_tilde_samples[:, :dim_delta]
 
-            loc = torch.cat((x_tilde_obs.loc, 0 * next_x_tilde.loc), dim=1)
-            scale = torch.cat((x_tilde_obs.covariance_matrix,
-                               next_x_tilde.covariance_matrix), dim=1)
-
-            next_x_tilde = MultivariateNormal(loc, scale)
-            ############################################################################
-            # RESAMPLE y_tilde #
-            ############################################################################
-
-            x_tilde = next_x_tilde
+            loc = torch.cat((x_tilde_obs.loc, next_x_tilde.loc), dim=1)
+            cov = torch.cat((x_tilde_obs.covariance_matrix,
+                             next_x_tilde.covariance_matrix), dim=1)
 
             ############################################################################
             # PREDICT Outputs #
             ############################################################################
+            x_tilde = MultivariateNormal(loc, cov)
             outputs.append(x_tilde)
 
         assert len(outputs) == sequence_length
