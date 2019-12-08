@@ -30,6 +30,7 @@ class Evaluator(dict):
     def __init__(self):
         self.criteria = ['loglik', 'nrmse', 'rmse']
         super().__init__({criterion: [] for criterion in self.criteria})
+        self._last = {criterion: None for criterion in self.criteria}
 
     def __str__(self):
         return 'Log-Lik: {:.4}. NRMSE: {:.4}. RMSE: {:.4} '.format(
@@ -37,6 +38,11 @@ class Evaluator(dict):
             np.array(self['nrmse']).mean(),
             np.array(self['rmse']).mean()
         )
+
+    @property
+    def last(self) -> str:
+        return 'Log-Lik: {:.4}. NRMSE: {:.4}. RMSE: {:.4} '.format(
+            self._last['loglik'], self._last['nrmse'], self._last['rmse'])
 
     def evaluate(self, predictions: Normal, true_values: Tensor, scale: Tensor) -> None:
         """Return the RMS error between the true values and the mean predictions.
@@ -48,14 +54,17 @@ class Evaluator(dict):
             [time x dim x dim] or [time x dim].
         true_values: Tensor.
             A tensor with shape [time x dim].
+        scale: Tensor.
+            Output scale.
 
         Returns
         -------
-        log_likelihood: float.
+        criteria: dict.
         """
         for criterion in self.criteria:
-            self[criterion].append(getattr(self, criterion)(predictions, true_values,
-                                                            scale))
+            val = getattr(self, criterion)(predictions, true_values, scale)
+            self._last[criterion] = val
+            self[criterion].append(val)
 
     @staticmethod
     def loglik(predictions: Normal, true_values: Tensor, _: Tensor = None) -> float:
@@ -210,41 +219,40 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
         List of losses encountered during training.
     """
     losses = []
-    iter_ = 0
-    dataset = dataloader.dataset  # type: Dataset  # type: ignore
-    output_scale = torch.tensor(dataset.output_normalizer.sd).float()
+    best_rmse = float('inf')
+    output_scale = torch.tensor(test_set.output_normalizer.sd).float()
+    model_file = experiment.log_dir + 'model_{}.pt'.format(experiment.seed)
     evaluator = Evaluator()
-    print_iter = experiment.configs.get('print_iter', None)
 
-    train_file = '{}trainiter{}.txt'.format(experiment.fig_dir, experiment.seed)
+    train_file = '{}train_epoch.txt'.format(experiment.fig_dir)
     if os.path.exists(train_file):
         os.remove(train_file)
 
-    for _ in tqdm(range(num_epochs)):
-        for inputs, outputs, _ in tqdm(dataloader):
+    for i_epoch in tqdm(range(num_epochs)):
+        for i_iter, (inputs, outputs) in enumerate(tqdm(dataloader)):
             # Zero the gradients of the Optimizer
             optimizer.zero_grad()
 
             # Compute the loss.
-            predicted_outputs, loss = model.forward(outputs, inputs)
+            predicted_outputs, loss = model.forward(outputs, inputs, print=not i_iter)
 
             # Back-propagate
             loss.backward()
             optimizer.step()
             losses.append(loss.item())
-            iter_ += 1
 
-            # Evaluate
-            if print_iter is not None and (iter_ % print_iter) == 0:
-                with torch.no_grad():
-                    model.eval()
-                    inputs, outputs, _ = test_set[0]
-                    inputs, outputs = inputs.unsqueeze(0), outputs.unsqueeze(0)
-                    _evaluate(model, outputs, inputs, output_scale, evaluator,
-                              experiment, 'trainiter_{}'.format(iter_))
-                    dump(str(iter_) + str(evaluator) + '\n', train_file, 'a+')
-                    model.train()
-
+        # Evaluate
+        with torch.no_grad():
+            model.eval()
+            inputs, outputs = test_set[0]
+            inputs, outputs = inputs.unsqueeze(0), outputs.unsqueeze(0)
+            _evaluate(model, outputs, inputs, output_scale, evaluator,
+                      experiment, 'epoch_{}'.format(i_epoch))
+            dump(str(i_epoch + 1) + ' ' + evaluator.last + '\n', train_file, 'a+')
+            if evaluator['rmse'][-1] < best_rmse:
+                best_rmse = evaluator['rmse'][-1]
+                torch.save(model.state_dict(), model_file)
+            model.train()
         print(model)
 
     fig = plot_loss(losses, ylabel=model.loss_key.upper())
@@ -253,6 +261,7 @@ def train(model: SSM, dataloader: DataLoader, optimizer: Optimizer, num_epochs: 
     fig.show()
     fig.savefig('{}training_loss.png'.format(experiment.fig_dir))
     plt.close(fig)
+    model.load_state_dict(torch.load(model_file))
 
     return losses
 
@@ -279,7 +288,7 @@ def evaluate(model: SSM, dataloader: DataLoader, experiment: Experiment, key: st
 
     with torch.no_grad():
         model.eval()
-        for inputs, outputs, states in dataloader:
+        for inputs, outputs in dataloader:
             _evaluate(model, outputs, inputs, output_scale, evaluator, experiment,
                       key)
     return evaluator
@@ -296,7 +305,7 @@ def _evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: T
     scale = collapsed_predicted_outputs.scale.detach().numpy()
 
     evaluator.evaluate(collapsed_predicted_outputs, outputs, output_scale)
-    print(str(evaluator))
+    print('\n' + evaluator.last)
 
     fig = plot_pred(mean[-1].T, np.sqrt(scale[-1]).T, outputs[-1].numpy().T)
     fig.axes[0].set_title('{} {} {} Prediction'.format(
