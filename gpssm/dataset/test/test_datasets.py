@@ -50,7 +50,6 @@ def test_dataset_shapes(train, dataset, sequence_length, sequence_stride):
 
     assert dataset.inputs.dtype == np.float64
     assert dataset.outputs.dtype == np.float64
-    assert dataset.states.dtype == np.float64
 
     if train:
         n_exp = n_train
@@ -68,12 +67,11 @@ def test_dataset_shapes(train, dataset, sequence_length, sequence_stride):
 
     assert len(dataset) == n_exp * num_seq
 
-    inputs, outputs, states = dataset[np.random.choice(len(dataset))]
+    inputs, outputs = dataset[np.random.choice(len(dataset))]
     assert inputs.shape == (sequence_length, dim_u)
     assert outputs.shape == (sequence_length, dim_y)
-    assert states.shape == (sequence_length, dim_x)
 
-    for tensor in [inputs, outputs, states]:
+    for tensor in [inputs, outputs]:
         assert type(tensor) == torch.Tensor
         assert tensor.dtype == torch.float
 
@@ -87,9 +85,8 @@ def test_dataset_shapes(train, dataset, sequence_length, sequence_stride):
 
     assert len(dataset) == n_exp * num_seq
 
-    inputs, outputs, states = dataset[np.random.choice(len(dataset))]
+    inputs, outputs = dataset[np.random.choice(len(dataset))]
     assert inputs.shape == (sequence_length, dim_u)
     assert outputs.shape == (sequence_length, dim_y)
-    assert states.shape == (sequence_length, dim_x)
 
 

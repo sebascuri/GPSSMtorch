@@ -35,9 +35,15 @@ def get_data_split(array: np.ndarray, split_idx: int = None, train: bool = True
         split_idx = array.shape[1] // 2
 
     if train:
-        array = array[:, :split_idx, :]
+        if array.shape[0] > split_idx:  # Experiment split.
+            array = array[:split_idx, :, :]
+        else:  # Trajectory split.
+            array = array[:, :split_idx, :]
     else:
-        array = array[:, split_idx:, :]
+        if array.shape[0] > split_idx:
+            array = array[split_idx:, :, :]
+        else:
+            array = array[:, split_idx:, :]
 
     return array
 

@@ -41,17 +41,18 @@ class Dataset(data.TensorDataset):
     dim_inputs = None  # type: int
 
     def __init__(self, outputs: np.ndarray = np.empty((1,)),
-                 inputs: np.ndarray = None, states: np.ndarray = None,
+                 inputs: np.ndarray = None,
                  sequence_length: int = None, sequence_stride: int = 1,
+                 split_idx: int = None,
                  data_dir: str = DATA_DIR, train: bool = True) -> None:
 
         assert outputs.ndim == 3, 'Outputs shape is [n_experiment, time, dim]'
         assert self.dim_outputs == outputs.shape[2]
 
         self.train = train
-        self.num_experiments, self.experiment_length, _ = outputs.shape
+        num_experiments, experiment_length, _ = outputs.shape
         if sequence_length is None:
-            sequence_length = min(20, self.experiment_length)
+            sequence_length = min(20, experiment_length)
         self._sequence_length = sequence_length
         self._sequence_stride = sequence_stride
 
@@ -62,38 +63,37 @@ class Dataset(data.TensorDataset):
             assert inputs.shape[1] == outputs.shape[1], """
                 Inputs and outputs experiments should be equally long"""
         else:
-            inputs = np.zeros((self.num_experiments, self.experiment_length, 0))
+            inputs = np.zeros((num_experiments, experiment_length, 0))
 
         assert self.dim_inputs == inputs.shape[2]
 
-        if states is not None:
-            assert states.ndim == 3, 'States shape is [n_experiment, time, dim]'
-            assert states.shape[0] == outputs.shape[0], """
-                States and outputs must have the same number of experiments"""
-            assert states.shape[1] == outputs.shape[1], """
-                States and outputs experiments should be equally long"""
-        else:
-            states = np.zeros((self.num_experiments, self.experiment_length, 0))
+        train_inputs = get_data_split(inputs, split_idx, train=True)
+        train_outputs = get_data_split(outputs, split_idx, train=True)
 
-        self.dim_states = states.shape[2]
+        test_inputs = get_data_split(inputs, split_idx, train=False)
+        test_outputs = get_data_split(outputs, split_idx, train=False)
 
         # Store normalized inputs, outputs, states.
-        self.input_normalizer = Normalizer(inputs)
-        self.output_normalizer = Normalizer(outputs)
-        self.state_normalizer = Normalizer(states)
+        self.input_normalizer = Normalizer(train_inputs)
+        self.output_normalizer = Normalizer(train_outputs)
 
-        self.inputs = self.input_normalizer(inputs)
-        self.outputs = self.output_normalizer(outputs)
-        self.states = self.state_normalizer(states)
+        if self.train:
+            self.inputs = self.input_normalizer(train_inputs)
+            self.outputs = self.output_normalizer(train_outputs)
+        else:
+            self.inputs = self.input_normalizer(test_inputs)
+            self.outputs = self.output_normalizer(test_outputs)
+
+        self.num_experiments, self.experiment_length, _ = self.outputs.shape
 
         super().__init__(*[torch.tensor(
             generate_batches(x, self._sequence_length, self._sequence_stride)).float()
-                           for x in [self.inputs, self.outputs, self.states]])
+                           for x in [self.inputs, self.outputs]])
 
     def __str__(self):
         """Return string with dataset statistics."""
-        string = 'input dim: {} \noutput dim: {} \nstate dim: {} \n\n'.format(
-            self.dim_inputs, self.dim_outputs, self.dim_states
+        string = 'input dim: {} \noutput dim: {} \n'.format(
+            self.dim_inputs, self.dim_outputs
         )
         string += 'sequence length: {} \n'.format(
             self.tensors[0].shape[1]
@@ -120,7 +120,7 @@ class Dataset(data.TensorDataset):
         self._sequence_length = new_seq_length
         self.tensors = [torch.tensor(
             generate_batches(x, self._sequence_length, self._sequence_stride)).float()
-                        for x in [self.inputs, self.outputs, self.states]]
+                        for x in [self.inputs, self.outputs]]
 
     @staticmethod
     def f(x: np.ndarray, u: np.ndarray = None) -> np.ndarray:
@@ -166,11 +166,10 @@ class Actuator(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'actuator.mat'))
 
-        inputs = get_data_split(raw_data['u'][np.newaxis], train=train)
-        outputs = get_data_split(raw_data['p'][np.newaxis], train=train)
-        states = get_data_split(raw_data['x'][np.newaxis], train=train)
+        inputs = raw_data['u'][np.newaxis]
+        outputs = raw_data['p'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs, states=states,
+        super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -209,8 +208,8 @@ class BallBeam(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'ballbeam.dat'))
 
-        inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
-        outputs = get_data_split(raw_data[np.newaxis, :, 1, np.newaxis], train=train)
+        inputs = raw_data[np.newaxis, :, 0, np.newaxis]
+        outputs = raw_data[np.newaxis, :, 1, np.newaxis]
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
@@ -250,12 +249,8 @@ class Drive(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'drive.mat'))
 
-        inputs = get_data_split(raw_data['u1'][np.newaxis], train=train)
-        outputs = get_data_split(raw_data['z1'][np.newaxis], train=train)
-        # inputs = get_data_split(
-        #     np.stack([raw_data['u{}'.format(i)] for i in range(1, 4)]), train=train)
-        # outputs = get_data_split(
-        #     np.stack([raw_data['z{}'.format(i)] for i in range(1, 4)]), train=train)
+        inputs = raw_data['u1'][np.newaxis]
+        outputs = raw_data['z1'][np.newaxis]
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
@@ -296,8 +291,8 @@ class Dryer(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'dryer.dat'))
 
-        inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
-        outputs = get_data_split(raw_data[np.newaxis, :, 1, np.newaxis], train=train)
+        inputs = raw_data[np.newaxis, :, 0, np.newaxis]
+        outputs = raw_data[np.newaxis, :, 1, np.newaxis]
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
@@ -338,8 +333,8 @@ class Flutter(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'flutter.dat'))
 
-        inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
-        outputs = get_data_split(raw_data[np.newaxis, :, 1, np.newaxis], train=train)
+        inputs = raw_data[np.newaxis, :, 0, np.newaxis]
+        outputs = raw_data[np.newaxis, :, 1, np.newaxis]
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
@@ -380,8 +375,8 @@ class GasFurnace(Dataset):
         raw_data = np.loadtxt(os.path.join(data_dir, 'gas_furnace.csv'),
                               skiprows=1, delimiter=',')
 
-        inputs = get_data_split(raw_data[np.newaxis, :, 0, np.newaxis], train=train)
-        outputs = get_data_split(raw_data[np.newaxis, :, 1, np.newaxis], train=train)
+        inputs = raw_data[np.newaxis, :, 0, np.newaxis]
+        outputs = raw_data[np.newaxis, :, 1, np.newaxis]
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
@@ -421,8 +416,8 @@ class Tank(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'tank.mat'))
 
-        inputs = get_data_split(raw_data['u'].T[np.newaxis], train=train)
-        outputs = get_data_split(raw_data['y'].T[np.newaxis], train=train)
+        inputs = raw_data['u'].T[np.newaxis]
+        outputs = raw_data['y'].T[np.newaxis]
 
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
@@ -469,14 +464,12 @@ class Sarcos(Dataset):
         subsampled_data = np.stack([raw_data[ind:ind + exp_len:downsample, :] for ind in
                                     range(0, raw_data.shape[0], exp_len)])
 
-        if train:
-            inputs = subsampled_data[:split_idx, :, 21:28]
-            outputs = subsampled_data[:split_idx, :, 0:7]
-        else:
-            inputs = subsampled_data[split_idx:, :, 21:28]
-            outputs = subsampled_data[split_idx:, :, 0:7]
+        inputs = subsampled_data[:, :, 21:28]
+        outputs = subsampled_data[:, :, 0:7]
+
         super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
+                         split_idx=split_idx,
                          sequence_stride=sequence_stride, train=train)
 
 
@@ -509,11 +502,10 @@ class NonLinearSpring(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'spring_nonlinear.mat'))
 
-        inputs = get_data_split(raw_data['ds_u'][np.newaxis], train=train)
-        outputs = get_data_split(raw_data['ds_y'][np.newaxis], train=train)
-        states = get_data_split(raw_data['ds_x'][np.newaxis], train=train)
+        inputs = raw_data['ds_u'][np.newaxis]
+        outputs = raw_data['ds_y'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs, states=states,
+        super().__init__(inputs=inputs, outputs=outputs,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -548,11 +540,10 @@ class RoboMove(Dataset):
         raw_data = sio.loadmat(os.path.join(data_dir, 'robomove.mat'))
         split_idx = 25000
 
-        inputs = get_data_split(raw_data['ds_u'][np.newaxis], split_idx, train=train)
-        outputs = get_data_split(raw_data['ds_y'][np.newaxis], split_idx, train=train)
-        states = get_data_split(raw_data['ds_x'][np.newaxis], split_idx, train=train)
+        inputs = raw_data['ds_u'][np.newaxis]
+        outputs = raw_data['ds_y'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs, states=states,
+        super().__init__(inputs=inputs, outputs=outputs, split_idx=split_idx,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -587,11 +578,10 @@ class RoboMoveSimple(Dataset):
         raw_data = sio.loadmat(os.path.join(data_dir, 'robomove_simple.mat'))
         split_idx = 25000
 
-        inputs = get_data_split(raw_data['ds_u'][np.newaxis], split_idx, train=train)
-        outputs = get_data_split(raw_data['ds_y'][np.newaxis], split_idx, train=train)
-        states = get_data_split(raw_data['ds_x'][np.newaxis], split_idx, train=train)
+        inputs = raw_data['ds_u'][np.newaxis]
+        outputs = raw_data['ds_y'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs, states=states,
+        super().__init__(inputs=inputs, outputs=outputs, split_idx=split_idx,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -661,18 +651,15 @@ class KinkFunction(Dataset):
                 'ds_y': outputs,
                 'title': 'Kink Function'
             })
-            states = states[np.newaxis]
+            # states = states[np.newaxis]
             outputs = outputs[np.newaxis]
 
         else:
             raw_data = sio.loadmat(file_name)
-            states = raw_data['ds_x'][np.newaxis]
+            # states = raw_data['ds_x'][np.newaxis]
             outputs = raw_data['ds_y'][np.newaxis]
 
-        outputs = get_data_split(outputs, train=train)
-        states = get_data_split(states, train=train)
-
-        super().__init__(outputs=outputs, states=states,
+        super().__init__(outputs=outputs,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
