@@ -291,7 +291,7 @@ def _parse_inducing_points(dim_inputs: int, dim_outputs: int = 1,
 
 def _parse_var_dist(num_points: int, dim_outputs: int = 1,
                     kind: str = 'full',
-                    mean: float = None, var: float = None,
+                    mean: float = None, variance: float = None,
                     learn_mean: bool = True, learn_var: bool = True
                     ) -> AppCholVaDi:
     if kind == 'full':
@@ -311,9 +311,9 @@ def _parse_var_dist(num_points: int, dim_outputs: int = 1,
     var_dist.variational_mean.requires_grad = learn_mean
 
     if kind != 'delta':
-        if var is not None:
-            new_cov = np.sqrt(var) * torch.eye(num_points).repeat(dim_outputs, 1, 1)
-            var_dist.chol_variational_covar.data = new_cov
+        if variance is not None:
+            new_sd = np.sqrt(variance) * torch.eye(num_points).repeat(dim_outputs, 1, 1)
+            var_dist.chol_variational_covar.data = new_sd
         var_dist.chol_variational_covar.requires_grad = learn_var
 
     return var_dist
