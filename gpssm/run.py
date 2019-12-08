@@ -4,7 +4,7 @@ import torch
 import torch.optim
 from gpssm.dataset import get_dataset
 from gpssm.models import get_model
-from gpssm.utilities import train, Experiment, dump
+from gpssm.utilities import train, Experiment
 
 
 def main(experiment: Experiment, num_threads: int = 2):

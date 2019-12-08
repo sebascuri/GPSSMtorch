@@ -59,4 +59,4 @@ model:
       learn_mean: True  # Learnable parameters flag.
       mean: 0.0025  # Initial mean estimate.
       learn_var: True # Learnable parameters flag.
-      var: 0.001  # Initial variance estimate.
+      variance: 0.001  # Initial variance estimate.

@@ -4,7 +4,7 @@ from torch import Tensor
 import torch
 import torch.jit
 import torch.nn as nn
-from torch.distributions import kl_divergence
+# from torch.distributions import kl_divergence
 from typing import List, Tuple
 from gpytorch.distributions import MultivariateNormal
 
@@ -171,7 +171,7 @@ class SSM(nn.Module, ABC):
         # entropy = torch.tensor(0.)
         # if self.training:
         #     output_distribution.pop(0)
-            # entropy += y_tilde.entropy().mean() / sequence_length
+        #     # entropy += y_tilde.entropy().mean() / sequence_length
 
         y = output_sequence[:, 0].expand(num_particles, batch_size, dim_outputs
                                          ).permute(1, 2, 0)

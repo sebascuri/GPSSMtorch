@@ -300,7 +300,7 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
 
 def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Tensor,
              evaluator: Evaluator, experiment: Experiment, key: str) -> None:
-    """Evaluate outputs"""
+    """Evaluate outputs."""
     with settings.fast_pred_samples(state=True), settings.fast_pred_var(state=True):
         # predicted_outputs = model.predict(outputs, inputs)
         predicted_outputs, _ = model.forward(outputs, inputs)
