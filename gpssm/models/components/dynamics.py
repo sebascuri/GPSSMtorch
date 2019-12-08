@@ -12,7 +12,7 @@ from gpytorch.models import AbstractVariationalGP, ExactGP
 from .variational import VariationalStrategy, ApproxCholeskyVariationalDistribution
 
 __author__ = 'Sebastian Curi'
-__all__ = ['Dynamics', 'IdentityDynamics',
+__all__ = ['Dynamics', 'ZeroDynamics',
            'GPDynamics', 'ExactGPModel', 'VariationalGP']
 
 
@@ -58,17 +58,15 @@ class NNDynamics(nn.Module, Dynamics):
         return ""
 
 
-class IdentityDynamics(NNDynamics):
-    """Dynamics that returns the same state."""
+class ZeroDynamics(NNDynamics):
+    """Dynamics that returns a zero next state."""
 
     def forward(self, *args: Tensor, **kwargs) -> MultivariateNormal:
         """Call a Dynamical System at a given state-input pair."""
         state_input = args[0]
         batch_size, _, num_particles = state_input.shape
-        state_input = args[0]
-        loc = state_input[:, :self.num_outputs, :]
-        scale = 1 * torch.ones(self.num_outputs).expand(batch_size, num_particles, -1
-                                                        ).transpose(-1, -2)
+        loc = torch.zeros(batch_size, self.num_outputs, num_particles)
+        scale = torch.ones(batch_size, self.num_outputs, num_particles)
         cov = torch.diag_embed(scale)
 
         return MultivariateNormal(loc, cov)
