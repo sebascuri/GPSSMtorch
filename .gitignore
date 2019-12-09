@@ -5,12 +5,6 @@ model_initial.txt
 *results.txt
 *.pt
 *.png
-Actuator/
-BallBeam/
-Drive/
-Dryer/
-GasFurnace/
-Flutter/
 Robomove/
 RoboMoveSimple/
 experiments/sample/
