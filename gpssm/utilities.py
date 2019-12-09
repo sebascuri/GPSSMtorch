@@ -221,6 +221,11 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     losses = []
     evaluator = Evaluator()
 
+    verbose = experiment.configs.get('verbose', 1)
+    show_progress = verbose > 0
+    plot_outputs = verbose > 1
+    print_all = verbose > 2
+
     best_rmse = float('inf')
     output_scale = torch.tensor(train_set.output_normalizer.sd).float()
     model_file = experiment.log_dir + 'model_{}.pt'.format(experiment.seed)
@@ -239,14 +244,16 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     if num_epochs is None:
         num_epochs = max(1, np.floor(max_iter * batch_size / len(train_set)))
 
-    for i_epoch in tqdm(range(num_epochs)):
+    for i_epoch in tqdm(range(num_epochs), disable=not show_progress):
         model.train()
-        for i_iter, (inputs, outputs) in enumerate(tqdm(train_loader)):
+        for i_iter, (inputs, outputs) in enumerate(tqdm(train_loader,
+                                                        disable=not show_progress)):
             # Zero the gradients of the Optimizer
             optimizer.zero_grad()
 
             # Compute the loss.
-            predicted_outputs, loss = model.forward(outputs, inputs, print=not i_iter)
+            predicted_outputs, loss = model.forward(
+                outputs, inputs, print=print_all or (not i_iter and plot_outputs))
 
             # Back-propagate
             loss.backward()
@@ -256,42 +263,46 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
         # Evaluate
         with torch.no_grad():
             model.eval()
-            for inputs, outputs in tqdm(test_loader):
-                evaluate(model, outputs, inputs, output_scale, evaluator,
-                         experiment, 'epoch_{}'.format(i_epoch))
+            for inputs, outputs in tqdm(test_loader, disable=not show_progress):
+                evaluate(model, outputs, inputs, output_scale, evaluator, experiment,
+                         'epoch_{}'.format(i_epoch), plot_outputs=plot_outputs)
                 dump(str(i_epoch) + ' ' + evaluator.last + '\n', train_file, 'a+')
                 if evaluator['rmse'][-1] < best_rmse:
                     best_rmse = evaluator['rmse'][-1]
                     torch.save(model.state_dict(), model_file)
 
-        print(model)
+        if plot_outputs:
+            print(model)
 
     # Plot Losses.
-    dump(str(losses), experiment.fig_dir + 'losses_{}.txt'.format(experiment.seed))
-    fig = plot_loss(losses, ylabel=model.loss_key.upper())
-    fig.gca().set_title('{} {} Training Loss'.format(
-        experiment.model, experiment.dataset))
-    fig.show()
-    fig.savefig('{}training_loss.png'.format(experiment.fig_dir))
-    plt.close(fig)
+    if plot_outputs:
+        dump(str(losses), experiment.fig_dir + 'losses_{}.txt'.format(experiment.seed))
+        fig = plot_loss(losses, ylabel=model.loss_key.upper())
+        fig.gca().set_title('{} {} Training Loss'.format(
+            experiment.model, experiment.dataset))
+        fig.show()
+        fig.savefig('{}training_loss.png'.format(experiment.fig_dir))
+        plt.close(fig)
 
     # ReLoad best model.
     model.load_state_dict(torch.load(model_file))
-    dump(str(model), experiment.fig_dir + 'model_final_{}.txt'.format(experiment.seed))
+    if plot_outputs:
+        dump(str(model),
+             experiment.fig_dir + 'model_final_{}.txt'.format(experiment.seed))
 
     # Evaluate Test set.
     model.eval()
-    for inputs, outputs in tqdm(test_loader):
+    for inputs, outputs in tqdm(test_loader, disable=not show_progress):
         evaluate(model, outputs, inputs, output_scale, evaluator,
-                 experiment, 'Test')
+                 experiment, 'Test', plot_outputs=show_progress)
         dump('Test ' + evaluator.last + '\n', train_file, 'a+')
 
     # Evaluate Train set.
     train_set.sequence_length = test_set.sequence_length
     train_eval_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False)
-    for inputs, outputs in tqdm(train_eval_loader):
+    for inputs, outputs in tqdm(train_eval_loader, disable=not show_progress):
         evaluate(model, outputs, inputs, output_scale, evaluator,
-                 experiment, 'Train')
+                 experiment, 'Train', plot_outputs=show_progress)
         dump('Train ' + evaluator.last + '\n', train_file, 'a+')
 
     save(experiment, evaluator=evaluator)
@@ -299,49 +310,50 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
 
 
 def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Tensor,
-             evaluator: Evaluator, experiment: Experiment, key: str) -> None:
+             evaluator: Evaluator, experiment: Experiment, key: str,
+             plot_outputs: bool=False) -> None:
     """Evaluate outputs."""
     with settings.fast_pred_samples(state=True), settings.fast_pred_var(state=True):
         # predicted_outputs = model.predict(outputs, inputs)
         predicted_outputs, _ = model.forward(outputs, inputs)
     collapsed_predicted_outputs = approximate_with_normal(predicted_outputs)
-
-    mean = collapsed_predicted_outputs.loc.detach().numpy()
-    scale = collapsed_predicted_outputs.scale.detach().numpy()
-
     evaluator.evaluate(collapsed_predicted_outputs, outputs, output_scale)
-    print('\n' + evaluator.last)
 
-    fig = plot_pred(mean[-1].T, np.sqrt(scale[-1]).T, outputs[-1].numpy().T)
-    fig.axes[0].set_title('{} {} {} Prediction'.format(
-        experiment.model, experiment.dataset, key.capitalize()))
-    fig.show()
-    fig.savefig('{}prediction_{}.png'.format(experiment.fig_dir, key))
-    plt.close(fig)
+    if plot_outputs:
+        print('\n' + evaluator.last)
+        mean = collapsed_predicted_outputs.loc.detach().numpy()
+        scale = collapsed_predicted_outputs.scale.detach().numpy()
 
-    if 'robomove' in experiment.dataset.lower():
-        fig = plot_2d(mean[-1].T, outputs[-1].numpy().T)
+        fig = plot_pred(mean[-1].T, np.sqrt(scale[-1]).T, outputs[-1].numpy().T)
         fig.axes[0].set_title('{} {} {} Prediction'.format(
             experiment.model, experiment.dataset, key.capitalize()))
         fig.show()
-        fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
+        fig.savefig('{}prediction_{}.png'.format(experiment.fig_dir, key))
         plt.close(fig)
 
-    if 'kink' in experiment.dataset.lower():
-        gp = model.forward_model
-        transition = model.transitions
-        x = torch.arange(-3, 1, 0.1)
-        true_next_x = KinkFunction.f(x.numpy())
-        pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
+        if 'robomove' in experiment.dataset.lower():
+            fig = plot_2d(mean[-1].T, outputs[-1].numpy().T)
+            fig.axes[0].set_title('{} {} {} Prediction'.format(
+                experiment.model, experiment.dataset, key.capitalize()))
+            fig.show()
+            fig.savefig('{}prediction2d_{}.png'.format(experiment.fig_dir, key))
+            plt.close(fig)
 
-        fig = plot_transition(
-            x.numpy(), true_next_x, pred_next_x.loc[-1, -1].numpy(),
-            torch.diag(pred_next_x.covariance_matrix[-1, -1]).sqrt().numpy())
-        fig.axes[0].set_title('{} {} Learned Function'.format(
-            experiment.model, experiment.dataset))
-        fig.show()
-        fig.savefig('{}transition.png'.format(experiment.fig_dir))
-        plt.close(fig)
+        if 'kink' in experiment.dataset.lower():
+            gp = model.forward_model
+            transition = model.transitions
+            x = torch.arange(-3, 1, 0.1)
+            true_next_x = KinkFunction.f(x.numpy())
+            pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
+
+            fig = plot_transition(
+                x.numpy(), true_next_x, pred_next_x.loc[-1, -1].numpy(),
+                torch.diag(pred_next_x.covariance_matrix[-1, -1]).sqrt().numpy())
+            fig.axes[0].set_title('{} {} Learned Function'.format(
+                experiment.model, experiment.dataset))
+            fig.show()
+            fig.savefig('{}transition.png'.format(experiment.fig_dir))
+            plt.close(fig)
 
 
 def save(experiment: Experiment, **kwargs) -> None:

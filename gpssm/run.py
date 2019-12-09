@@ -71,6 +71,7 @@ if __name__ == "__main__":
         dataset_ = configs.get('dataset').pop('name')
     else:
         configs = {'experiment': {'name': 'experiments/sample/'},
+                   'verbose': 2,
                    'model': {'dim_states': 4,
                              'num_particles': 50,
                              'loss_factors': {'kl_u': .5, 'kl_conditioning': 1.},
