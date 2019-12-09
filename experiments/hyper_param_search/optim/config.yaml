@@ -1,6 +1,7 @@
 experiment:
   name: hyper_param_search/optim  # Experiment name.
   splits:
+    - ['model', 'name']
     - ['optimization', 'learning_rate'] # These are all the different experiments runner will parse.
     - ['optimization', 'batch_size']
 
@@ -25,7 +26,10 @@ optimization:
   num_epochs: 50  # Number of epochs to train the data.
 
 model:
-  name: 'PRSSM'
+  name:
+    - 'PRSSM'
+    - 'CBFSSM'
+    - 'VCDT'
   dim_states: 4  # Number of internal states.
   num_particles: 50
   # Number of particles for forwards/backwards sampling.

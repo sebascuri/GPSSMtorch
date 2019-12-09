@@ -1,6 +1,7 @@
 experiment:
   name: hyper_param_search/num_particles  # Experiment name.
   splits:
+    - ['model', 'name']
     - ['model', 'num_particles']
 
 verbose: 0
@@ -15,7 +16,10 @@ optimization:
   num_epochs: 50  # Number of epochs to train the data.
 
 model:
-  name: 'PRSSM'
+  name:
+    - 'PRSSM'
+    - 'CBFSSM'
+    - 'VCDT'
   dim_states: 4  # Number of internal states.
   num_particles:
     - 50

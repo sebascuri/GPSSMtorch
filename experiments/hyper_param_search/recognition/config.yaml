@@ -1,8 +1,9 @@
 experiment:
   name: hyper_param_search/recognition  # Experiment name.
   splits:
-
+    - ['model', 'name']
     - ['model', 'recognition', 'kind']
+
 verbose: 0
 dataset:
   name: Actuator
@@ -15,7 +16,10 @@ optimization:
   num_epochs: 50  # Number of epochs to train the data.
 
 model:
-  name: 'PRSSM'
+  name:
+    - 'PRSSM'
+    - 'CBFSSM'
+    - 'VCDT'
   dim_states: 4  # Number of internal states.
   num_particles: 50
   # Number of particles for forwards/backwards sampling.

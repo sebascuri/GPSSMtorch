@@ -6,13 +6,13 @@ experiment:
 verbose: 2
 dataset:
   name: Sarcos
-  sequence_length: 250
+  sequence_length: 100
   sequence_stride: 10
 
 optimization:
   learning_rate: 0.01
   batch_size: 5
-  num_epochs: 25
+  num_epochs: 5
   eval_length: 100
 
 model:
@@ -23,7 +23,7 @@ model:
   k_factor: 1.0  # This is the soft conditioning factor.
   loss_factors:  # These factors multiply each term of the ELBO.
     kl_u:
-      - 0.5
+      - 1.0
       - 0.1
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
     entropy: 0.0  # Entropy of the backwards model predictions.
@@ -34,10 +34,10 @@ model:
     learnable: True
   emissions:
     variance: 0.0025
-    learnable: False
+    learnable: True
   transitions:
     variance: 0.000004
-    learnable: False
+    learnable: True
   forward:
     mean:
       kind: 'zero'  # zero, constant, linear.

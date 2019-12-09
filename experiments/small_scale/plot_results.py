@@ -4,45 +4,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
 
-datasets = {'Actuator': 512, 'BallBeam': 500, 'Drive': 250, 'Dryer': 500,
-            'GasFurnace': 148, 'Flutter': 512, 'Tank': 1250}
-methods = ['PRSSM', 'VCDT', 'CBFSSM']
-seeds = [0, 1, 2, 3, 4]
+
+def parse_file(file_name):
+    """Parse a file."""
+    with open(file_name) as file:
+        data = file.readlines()
+    test = data[-2].split('. ')
+    test[0] = 'L' + test[0].split(' L')[1]
+
+    results = {}
+    for key_val in test:
+        key, val = key_val.split(':')
+        results[key.lower()] = float(val)
+    return results
+
+methods = ['PRSSM'] #, 'VCDT', 'CBFSSM']
+datasets = ['Actuator', 'BallBeam', 'Drive', 'Dryer', 'GasFurnace', 'Flutter', 'Tank']
+# seeds = [0, 1, 2, 3, 4]
 
 # fig, axes = plt.subplots(len(datasets), 1, sharex=True)
 fig = plt.figure()
-losses = {'rmse': {}, 'nrmse': {}, 'log-lik': {}}
-for dataset, length in datasets.items():
-    for key in losses:
-        losses[key][dataset] = {}
+losses = {}
+for method, dataset in product(methods, datasets):
+    if method not in losses:
+        losses[method] = {}
+    if dataset not in losses[method]:
+        losses[method][dataset] = {'rmse': [], 'nrmse': [], 'log-lik': []}
 
-    for method in methods:
-        for key in losses:
-            if method not in losses[key][dataset]:
-                losses[key][dataset][method] = [0, 0]
-        aux = []
-        for i, seed in enumerate(seeds):
-            file_name = '{}/{}/test_{}_results_{}.txt'.format(dataset, method,
-                                                              length, seed)
-            with open(file_name) as file:
-                data = file.readline().split('. ')
-                for key_val in data:
-                    key, val = key_val.split(':')
-                    old_mean = losses[key.lower()][dataset][method][0]
-                    old_var = losses[key.lower()][dataset][method][1] ** 2
-
-                    delta = float(val) - old_mean
-                    new_mean = old_mean + delta / (i + 1)
-                    new_var = delta ** 2 / (i + 1)
-                    if i > 0:
-                        new_var += old_var * (i-1) / i
-
-                    losses[key.lower()][dataset][method][0] = new_mean
-                    losses[key.lower()][dataset][method][1] = np.sqrt(new_var)
-                    if key.lower() == 'rmse':
-                        aux.append(float(val))
+    file_name = '{}/{}/train_epoch.txt'.format(method, dataset)
+    results = parse_file(file_name)
+    for key, val in results.items():
+        losses[method][dataset][key].append(val)
 
 for key in ['rmse', 'log-lik']:
     print(key)
-    for dataset in datasets:
-        print(dataset, losses[key][dataset])
+    for method, dataset in product(methods, datasets):
+        print(method, dataset, losses[method][dataset][key])
