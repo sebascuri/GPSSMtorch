@@ -9,7 +9,11 @@ from gpytorch.likelihoods import Likelihood
 from gpytorch.means import Mean
 from gpytorch.kernels import Kernel
 from gpytorch.models import AbstractVariationalGP, ExactGP
-from .variational import VariationalStrategy, ApproxCholeskyVariationalDistribution
+from .variational import VariationalStrategy
+from .variational import ApproxCholeskyVariationalDistribution as AppCholVaDi
+from .variational import CholeskyMeanVariationalDistribution as CholMeanVaDi
+from .variational import DeltaVariationalDistribution as DeltaVaDi
+from .variational import CholeskySampleVariationalDistribution as CholSamVaDi
 
 __author__ = 'Sebastian Curi'
 __all__ = ['Dynamics', 'ZeroDynamics',
@@ -38,6 +42,15 @@ class Dynamics(ABC):
     def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model with the Prior."""
         return torch.tensor(0.0)
+
+    @property
+    def independent(self):
+        """Return true if the function calls are independent of each other."""
+        return True
+
+    def resample(self):
+        """Resample the variational distribution approximation points."""
+        pass
 
 
 class NNDynamics(nn.Module, Dynamics):
@@ -242,11 +255,11 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
                  mean: Mean,
                  kernel: Kernel,
                  learn_inducing_loc: bool = True,
-                 variational_distribution: ApproxCholeskyVariationalDistribution = None
+                 variational_distribution: AppCholVaDi = None
                  ) -> None:
         if variational_distribution is None:
             batch_k, num_inducing, input_dims = inducing_points.shape
-            variational_distribution = ApproxCholeskyVariationalDistribution(
+            variational_distribution = AppCholVaDi(
                 num_inducing_points=num_inducing,
                 batch_size=batch_k
             )
@@ -279,3 +292,10 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
     def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model."""
         return self.variational_strategy.kl_divergence().sum(dim=1).mean()
+
+    @property
+    def independent(self):
+        type_var_dist = type(self.variational_strategy.variational_distribution)
+        return not (type_var_dist is CholMeanVaDi
+                    or type_var_dist is DeltaVaDi
+                    or type_var_dist is CholSamVaDi)
