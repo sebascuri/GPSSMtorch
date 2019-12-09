@@ -237,7 +237,7 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
-    train_file = '{}train_epoch.txt'.format(experiment.fig_dir)
+    train_file = '{}train_epoch_{}.txt'.format(experiment.fig_dir, experiment.seed)
     if os.path.exists(train_file):
         os.remove(train_file)
 
@@ -311,7 +311,7 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
 
 def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Tensor,
              evaluator: Evaluator, experiment: Experiment, key: str,
-             plot_outputs: bool=False) -> None:
+             plot_outputs: bool = False) -> None:
     """Evaluate outputs."""
     with settings.fast_pred_samples(state=True), settings.fast_pred_var(state=True):
         # predicted_outputs = model.predict(outputs, inputs)

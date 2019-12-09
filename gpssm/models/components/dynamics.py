@@ -295,6 +295,7 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
 
     @property
     def independent(self):
+        """Return true if the function calls are independent of each other."""
         type_var_dist = type(self.variational_strategy.variational_distribution)
         return not (type_var_dist is CholMeanVaDi
                     or type_var_dist is DeltaVaDi

@@ -4,7 +4,7 @@ from torch import Tensor
 import torch
 import torch.jit
 import torch.nn as nn
-# from torch.distributions import kl_divergence
+from torch.distributions import kl_divergence
 from typing import List, Tuple
 from gpytorch.distributions import MultivariateNormal
 
@@ -139,8 +139,8 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # PERFORM Backward Pass #
         ################################################################################
-        # if self.training:
-        #     output_distribution = self.backward(output_sequence, input_sequence)
+        if self.training:
+            output_distribution = self.backward(output_sequence, input_sequence)
 
         ################################################################################
         # Initial State #
@@ -162,9 +162,9 @@ class SSM(nn.Module, ABC):
         ################################################################################
 
         # entropy = torch.tensor(0.)
-        # if self.training:
-        #     output_distribution.pop(0)
-        #     # entropy += y_tilde.entropy().mean() / sequence_length
+        if self.training:
+            output_distribution.pop(0)
+            # entropy += y_tilde.entropy().mean() / sequence_length
 
         y = output_sequence[:, 0].expand(num_particles, batch_size, dim_outputs
                                          ).permute(1, 2, 0)
@@ -190,11 +190,11 @@ class SSM(nn.Module, ABC):
             ############################################################################
             # CONDITION Next State #
             ############################################################################
-            # if self.training:
-            #     y_tilde = output_distribution.pop(0)
-            #     p_next_state = next_state
-            #     next_state = self._condition(next_state, y_tilde)
-            #     kl_cond += kl_divergence(next_state, p_next_state).mean()
+            if self.training:
+                y_tilde = output_distribution.pop(0)
+                p_next_state = next_state
+                next_state = self._condition(next_state, y_tilde)
+                kl_cond += kl_divergence(next_state, p_next_state).mean()
             ############################################################################
             # RESAMPLE State #
             ############################################################################

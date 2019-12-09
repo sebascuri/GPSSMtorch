@@ -39,6 +39,8 @@ def main(experiment: Experiment, num_threads: int = 2):
     test_set = dataset(train=False, **dataset_config)
     if eval_length is None:
         test_set.sequence_length = test_set.experiment_length
+    else:
+        test_set.sequence_length = eval_length
     print(train_set)
     print(test_set)
 
