@@ -74,7 +74,7 @@ if __name__ == "__main__":
                    'model': {'dim_states': 4,
                              'num_particles': 50,
                              'loss_factors': {'kl_u': .5, 'kl_conditioning': 1.},
-                             'recognition': {'kind': 'output', 'length': 1,
+                             'recognition': {'kind': 'conv', 'length': 16,
                                              'variance': 0.1 ** 2},
                              'forward': {
                                  'mean': {'kind': 'zero'},
@@ -95,8 +95,8 @@ if __name__ == "__main__":
                              'transitions': {'variance': 0.002 ** 2, 'learnable': True}
                              },
                    'dataset': {'sequence_length': 50},
-                   'optimization': {'learning_rate': 0.1,
-                                    'batch_size': 32,
+                   'optimization': {'learning_rate': 0.005,
+                                    'batch_size': 10,
                                     'num_epochs': 50}
                    }
         model_ = 'PRSSM'
