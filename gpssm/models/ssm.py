@@ -133,15 +133,8 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # SAMPLE GP #
         ################################################################################
-        try:
-            self.forward_model.resample()  # type: ignore
-        except AttributeError:
-            pass
-
-        try:
-            self.backward_model.resample()  # type: ignore
-        except AttributeError:
-            pass
+        self.forward_model.resample()
+        self.backward_model.resample()
 
         ################################################################################
         # PERFORM Backward Pass #
@@ -229,17 +222,18 @@ class SSM(nn.Module, ABC):
         ################################################################################
         # Compute model KL divergences Divergences #
         ################################################################################
-        # kl_uf = self.forward_model.kl_divergence() / sequence_length
-        # kl_ub = self.backward_model.kl_divergence() / sequence_length
         factor = 1  # batch_size / self.dataset_size
         kl_uf = self.forward_model.kl_divergence()
-        if self.backward_model is not None:
-            kl_ub = self.backward_model.kl_divergence()
-        else:
-            kl_ub = torch.tensor(0.)
+        kl_ub = self.backward_model.kl_divergence()
+
+        if self.forward_model.independent:
+            kl_uf *= sequence_length
+        if self.backward_model.independent:
+            kl_ub *= sequence_length
+
         kl_cond = kl_cond * self.loss_factors['kl_conditioning'] * factor
-        kl_ub = kl_ub * sequence_length * self.loss_factors['kl_u'] * factor
-        kl_uf = kl_uf * sequence_length * self.loss_factors['kl_u'] * factor
+        kl_ub = kl_ub * self.loss_factors['kl_u'] * factor
+        kl_uf = kl_uf * self.loss_factors['kl_u'] * factor
 
         if self.loss_key.lower() == 'loglik':
             loss = -log_lik
