@@ -67,9 +67,9 @@ class LeonhardRunner(AbstractRunner):
         for cmd in tasks:
             bsub_cmd = 'bsub '
 
-            config_file = cmd.split('config-file ')[1].split('/config.yaml')[0]
-            config_file = config_file.replace('/', '_')
-            bsub_cmd += '-oo {} '.format('logs/lsf.{}'.format(config_file))
+            # config_file = cmd.split('config-file ')[1].split('/config.yaml')[0]
+            # config_file = config_file.replace('/', '_')
+            # bsub_cmd += '-oo {} '.format('logs/lsf.{}'.format(config_file))
 
             if self.wall_time is not None:
                 bsub_cmd += '-W {} '.format(self.wall_time)
@@ -79,7 +79,7 @@ class LeonhardRunner(AbstractRunner):
                 bsub_cmd += '-R "rusage[ngpus_excl_p=1]" '
 
             bsub_cmd += '-n {} '.format(self.num_threads)
-            os.system(bsub_cmd + '"{}"'.format(cmd))
+            os.system(bsub_cmd + '"{}" &'.format(cmd))
 
 
 class SingleRunner(AbstractRunner):
