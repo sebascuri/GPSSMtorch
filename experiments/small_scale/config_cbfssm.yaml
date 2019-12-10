@@ -8,7 +8,14 @@ experiment:
 
 verbose: 1
 dataset:
-  name: [Actuator, BallBeam, Drive, Dryer, Flutter, GasFurnace, Tank]
+  name:
+    - Actuator
+    - BallBeam
+    - Drive
+    - Dryer
+    - Flutter
+    - GasFurnace
+    - Tank
   sequence_length: 50  # Length of training mini-batch sequence.
   sequence_stride: 1  # Stride of mini-batch sequence (useful for large datasets).
 
@@ -16,7 +23,6 @@ optimization:
   learning_rate: 0.01  # Learning rate of the optimizer (for now, Adam).
   batch_size: 16  # Batch size of each iteration.
   num_epochs: 50  # Number of epochs to train the data.
-  curriculum: False # Flag that indicates if there is a curriculum.
 
 model:
   name: 'PRSSM'

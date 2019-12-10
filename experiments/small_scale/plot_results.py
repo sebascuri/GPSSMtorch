@@ -66,7 +66,9 @@ def process_method(method, datasets, keys):
             if np.mean(losses[dataset][key]['rmse']['last']) < min_loss:
                 min_key = key
                 min_loss = np.mean(losses[dataset][key]['rmse']['test'])
-        print(min_key, losses[dataset][min_key]['rmse'])
+        print(min_key,
+              losses[dataset][min_key]['rmse'],
+              losses[dataset][min_key]['log-lik'])
 
 
 # def process_method(method_name, datasets, var_dists, k_us, k_factor):

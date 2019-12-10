@@ -79,7 +79,7 @@ class LeonhardRunner(AbstractRunner):
                 bsub_cmd += '-R "rusage[ngpus_excl_p=1]" '
 
             bsub_cmd += '-n {} '.format(self.num_threads)
-            os.system(bsub_cmd + '"{}"'.format(cmd))
+            os.system(bsub_cmd + '"{}" &'.format(cmd))
 
 
 class SingleRunner(AbstractRunner):
