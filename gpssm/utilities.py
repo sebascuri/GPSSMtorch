@@ -222,9 +222,10 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     evaluator = Evaluator()
 
     verbose = experiment.configs.get('verbose', 1)
-    show_progress = verbose > 0
-    plot_outputs = verbose > 1
-    print_all = verbose > 2
+    show_progress = verbose > 0  # print tqdm and models
+    plot_outputs = verbose > 1  # plot final results.
+    plot_all = verbose > 2  # plot at every epoch.
+    print_all = verbose > 3  # print at every train iteration.
 
     best_rmse = float('inf')
     output_scale = torch.tensor(train_set.output_normalizer.sd).float()
@@ -265,13 +266,13 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
             model.eval()
             for inputs, outputs in tqdm(test_loader, disable=not show_progress):
                 evaluate(model, outputs, inputs, output_scale, evaluator, experiment,
-                         'epoch_{}'.format(i_epoch), plot_outputs=plot_outputs)
+                         'epoch_{}'.format(i_epoch), plot_outputs=plot_all)
                 dump(str(i_epoch) + ' ' + evaluator.last + '\n', train_file, 'a+')
                 if evaluator['rmse'][-1] < best_rmse:
                     best_rmse = evaluator['rmse'][-1]
                     torch.save(model.state_dict(), model_file)
 
-        if plot_outputs:
+        if show_progress:
             print(model)
 
     # Plot Losses.
@@ -286,15 +287,13 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
 
     # ReLoad best model.
     model.load_state_dict(torch.load(model_file))
-    if plot_outputs:
-        dump(str(model),
-             experiment.fig_dir + 'model_final_{}.txt'.format(experiment.seed))
+    dump(str(model), experiment.fig_dir + 'model_final_{}.txt'.format(experiment.seed))
 
     # Evaluate Test set.
     model.eval()
     for inputs, outputs in tqdm(test_loader, disable=not show_progress):
         evaluate(model, outputs, inputs, output_scale, evaluator,
-                 experiment, 'Test', plot_outputs=show_progress)
+                 experiment, 'Test', plot_outputs=plot_outputs)
         dump('Test ' + evaluator.last + '\n', train_file, 'a+')
 
     # Evaluate Train set.
@@ -302,7 +301,7 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     train_eval_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False)
     for inputs, outputs in tqdm(train_eval_loader, disable=not show_progress):
         evaluate(model, outputs, inputs, output_scale, evaluator,
-                 experiment, 'Train', plot_outputs=show_progress)
+                 experiment, 'Train', plot_outputs=plot_outputs)
         dump('Train ' + evaluator.last + '\n', train_file, 'a+')
 
     save(experiment, evaluator=evaluator)
