@@ -346,8 +346,9 @@ def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Te
             pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
 
             fig = plot_transition(
-                x.numpy(), true_next_x, pred_next_x.loc[-1, -1].numpy(),
-                torch.diag(pred_next_x.covariance_matrix[-1, -1]).sqrt().numpy())
+                x.numpy(), true_next_x, pred_next_x.loc[-1, -1].detach().numpy(),
+                torch.diag(
+                    pred_next_x.covariance_matrix[-1, -1]).sqrt().detach().numpy())
             fig.axes[0].set_title('{} {} Learned Function'.format(
                 experiment.model, experiment.dataset))
             fig.show()
