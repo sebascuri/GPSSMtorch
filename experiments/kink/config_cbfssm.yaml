@@ -5,7 +5,7 @@ experiment:
     - ['model', 'loss_factors', 'kl_u']
     - ['model', 'k_factor']
 
-verbose: 1
+verbose: 2
 dataset:
   name: KinkFunction
   sequence_length: 60  # Length of training mini-batch sequence.
