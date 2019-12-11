@@ -29,24 +29,20 @@ def parse_file(file_name):
     return results
 
 
-def process_method(method, datasets, keys):
+def process_method(method, datasets, keys, seeds):
     print(method)
     losses = {}
     for dataset in datasets:
         if dataset not in losses:
             losses[dataset] = {}
 
-        for k in keys:
+        for k, seed in product(keys, seeds):
             key = ('{}/'*len(k)).format(*k)
             if key not in losses[dataset]:
                 losses[dataset][key] = {}
 
-            try:
-                file_name = '{}/{}/{}train_epoch.txt'.format(method, dataset, key)
-                results = parse_file(file_name)
-            except FileNotFoundError:
-                file_name = '{}/{}/{}train_epoch_0.txt'.format(method, dataset, key)
-                results = parse_file(file_name)
+            file_name = '{}/{}/{}train_epoch_{}.txt'.format(method, dataset, key, seed)
+            results = parse_file(file_name)
 
             for split in results:
                 for loss, val in results[split].items():
@@ -57,7 +53,6 @@ def process_method(method, datasets, keys):
 
                     losses[dataset][key][loss][split].append(val)
 
-
     for dataset in datasets:
         print(dataset)
         min_loss = float('inf')
@@ -65,10 +60,13 @@ def process_method(method, datasets, keys):
         for key in losses[dataset]:
             if np.mean(losses[dataset][key]['rmse']['last']) < min_loss:
                 min_key = key
-                min_loss = np.mean(losses[dataset][key]['rmse']['test'])
+                min_loss = np.mean(losses[dataset][key]['rmse']['last'])
+        rmse = losses[dataset][min_key]['rmse']['test']
+        loglik = losses[dataset][min_key]['log-lik']['test']
         print(min_key,
-              losses[dataset][min_key]['rmse'],
-              losses[dataset][min_key]['log-lik'])
+              np.mean(rmse), np.std(rmse, ddof=1),
+              np.mean(loglik), np.std(loglik, ddof=1)
+              )
 
 
 # def process_method(method_name, datasets, var_dists, k_us, k_factor):
@@ -76,14 +74,21 @@ def process_method(method, datasets, keys):
 datasets = ['Actuator', 'BallBeam', 'Drive', 'Dryer', 'GasFurnace', 'Flutter', 'Tank']
 var_dists = ['full', 'delta', 'full', 'mean', 'sample']
 k_us = ['0.1', '0.01', '0.05']
-k_factors = ['1', '10', '50', '100']
+k_factors = ['1', '10', '50']
 
 process_method('CBFSSM', datasets, list(product(
     ['delta', 'full', 'mean', 'sample'],
     ['0.1', '0.01', '0.05'],
-    ['1', '10', '50', '100'])))
+    ['1', '10', '50'])),
+               [0, 1, 2, 3, 4])
 process_method('VCDT', datasets, list(product(
-    ['sample'],
-    ['0.1', '0.01', '0.05'])))
+    ['sample', 'mean', 'delta'],
+    ['0.1', '0.01', '0.05'])),
+               [0, 1, 2, 3, 4]
+               )
 
-process_method('PRSSM', datasets, [('',)])
+process_method('PRSSM', datasets, list(product(
+    ['full', 'mean', 'delta'],
+    ['0.1', '0.01', '0.05'])),
+               [0, 1, 2, 3, 4]
+               )
