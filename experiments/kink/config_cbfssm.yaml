@@ -12,14 +12,14 @@ dataset:
   sequence_stride: 1  # Stride of mini-batch sequence (useful for large datasets).
 
 optimization:
-  learning_rate: 0.01  # Learning rate of the optimizer (for now, Adam).
-  batch_size: 16  # Batch size of each iteration.
-  num_epochs: 50  # Number of epochs to train the data.
+  learning_rate: 0.001  # Learning rate of the optimizer (for now, Adam).
+  batch_size: 1  # Batch size of each iteration.
+  num_epochs: 3000  # Number of epochs to train the data.
 
 model:
   name: 'CBFSSM'
-  dim_states: 4  # Number of internal states.
-  num_particles: 50  # Number of particles for forwards/backwards sampling.
+  dim_states: 1  # Number of internal states.
+  num_particles: 100  # Number of particles for forwards/backwards sampling.
   independent_particles: True
   loss_key: 'elbo'  # This string identifies which loss to use.
   k_factor: # This is the soft conditioning factor.
@@ -29,15 +29,14 @@ model:
   loss_factors:  # These factors multiply each term of the ELBO.
     kl_u:
       - 0.1
-      - 0.05
       - 0.01
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
   recognition:
-    length: 16  # Length of recognition sequence.
-    kind: 'conv'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
+    length: 60  # Length of recognition sequence.
+    kind: 'lstm'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
     variance: 0.01  # Initial variance estimate.
   emissions:
-    variance: 0.8  # Initial variance estimate.
+    variance: 0.04  # Initial variance estimate.
     learnable: False
   transitions:
     variance: 0.0025  # Initial variance estimate.

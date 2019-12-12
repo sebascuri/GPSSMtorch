@@ -1,0 +1,59 @@
+experiment:
+  name: sarcos/CBFSSM
+  splits:
+    - ['model', 'forward', 'variational_distribution', 'kind']
+
+verbose: 2
+dataset:
+  name: Sarcos
+  sequence_length: 100
+  sequence_stride: 10
+
+optimization:
+  learning_rate: 0.01
+  batch_size: 10
+  num_epochs: 10
+
+model:
+  name: 'CBFSSM'
+  dim_states: 14
+  num_particles: 50
+  loss_key: 'elbo'
+  k_factor: 50
+  loss_factors:  # These factors multiply each term of the ELBO.
+    kl_u: 0.01
+    kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
+    entropy: 0.0  # Entropy of the backwards model predictions.
+  recognition:
+    length: 16
+    kind: 'conv'  # output, zero, nn, conv, lstm, bi-lstm.
+    variance: 0.0001
+    learnable: True
+  emissions:
+    variance: 0.0025
+    learnable: False
+  transitions:
+    variance: 0.000004
+    learnable: False
+  forward:
+    mean:
+      kind: 'zero'  # zero, constant, linear.
+    kernel:
+      shared: True
+      kind: 'rbf'  # rbf, matern 1/2, matern 3/2, matern 5/2, linear
+      ard_num_dims:  # if empty will automatically select dim_states + dim_inputs.
+      outputscale: 0.1
+      lengthscale: 2.0
+    inducing_points:
+      number_points: 50
+      strategy: 'uniform'
+      scale: 6.0
+      learnable: True
+    variational_distribution:
+      kind:
+        - sample
+        - full
+        - delta
+        - mean
+      mean: 0.0025
+      variance: 0.0001

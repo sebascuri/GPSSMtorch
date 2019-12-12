@@ -2,6 +2,7 @@ experiment:
   name: robomove/VCDT  # Experiment name.
   splits:
     - ['dataset', 'name']
+    - ['optimization', 'learning_rate']
     - ['model', 'forward', 'variational_distribution', 'kind']
     - ['model', 'loss_factors', 'kl_u']
 
@@ -10,14 +11,16 @@ dataset:
   name:
     - Robomove
     - RobomoveSimple
-  sequence_length: 250  # Length of training mini-batch sequence.
+  sequence_length: 300  # Length of training mini-batch sequence.
   sequence_stride: 50  # Stride of mini-batch sequence (useful for large datasets).
 
 optimization:
-  learning_rate: 0.01  # Learning rate of the optimizer (for now, Adam).
+  learning_rate:
+    - 0.001
+    - 0.01  # Learning rate of the optimizer (for now, Adam).
   batch_size: 32  # Batch size of each iteration.
-  num_epochs: 5  # Number of epochs to train the data.
-  eval_length: 250
+  num_epochs: 20  # Number of epochs to train the data.
+  eval_length: 300
 
 model:
   name: 'VCDT'
@@ -46,10 +49,10 @@ model:
       shared: True  # Shared parameters between components flag.
       kind: 'rbf'  # Strategies: rbf, matern 1/2, matern 3/2, matern 5/2, linear
       ard_num_dims:  # Number of ard dimensions. if empty will automatically select dim_states + dim_inputs.
-      outputscale: 0.1  # Initial variance estimate.
+      outputscale: 0.01  # Initial variance estimate.
       lengthscale: 2.0  # Initial lengthscale estimate.
     inducing_points:
-      number_points: 20  # Number of inducing points per (GP).
+      number_points: 50  # Number of inducing points per (GP).
       strategy: 'uniform'  # Initialization strategies: normal, uniform, or linspace.
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.

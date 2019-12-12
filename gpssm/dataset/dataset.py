@@ -637,7 +637,7 @@ class KinkFunction(Dataset):
                  sequence_length: int = None, sequence_stride: int = 1,
                  trajectory_length: int = 120, x0: float = 0.5,
                  process_noise_sd: float = 0.05,
-                 observation_noise_sd: float = np.sqrt(0.8)) -> None:
+                 observation_noise_sd: float = 0.2) -> None:
 
         file_name = os.path.join(data_dir, 'kink_function.mat')
         if not os.path.exists(file_name):
