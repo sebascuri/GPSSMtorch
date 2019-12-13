@@ -78,17 +78,24 @@ k_factors = ['1', '10', '50']
 
 process_method('CBFSSM', datasets, list(product(
     ['delta', 'full', 'mean', 'sample'],
-    ['0.1', '0.01', '0.05'],
-    ['1', '10', '50'])),
+    # ['0.1', '0.01', '0.05'],
+    ['0.05'],
+    ['1'],
+    # ['1', '10', '50']
+)),
                [0, 1, 2, 3, 4])
 process_method('VCDT', datasets, list(product(
-    ['sample', 'mean', 'delta'],
-    ['0.1', '0.01', '0.05'])),
-               [0, 1, 2, 3, 4]
+    ['sample'],
+    # [ sample, 'mean', 'delta'],
+    ['0.1'],
+    # ['0.1', '0.01', '0.05'],
+    )),
+            [0, 1, 2, 3, 4]
                )
 
 process_method('PRSSM', datasets, list(product(
-    ['full', 'mean', 'delta'],
-    ['0.1', '0.01', '0.05'])),
+    ['full'], #, 'mean', 'delta'],
+    ['0.1'] #, '0.01', '0.05']
+    )),
                [0, 1, 2, 3, 4]
                )

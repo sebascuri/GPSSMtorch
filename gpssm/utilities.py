@@ -228,6 +228,7 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     print_all = verbose > 3  # print at every train iteration.
 
     best_rmse = float('inf')
+    output_mean = torch.tensor(train_set.output_normalizer.mean).float()
     output_scale = torch.tensor(train_set.output_normalizer.sd).float()
     model_file = experiment.log_dir + 'model_{}.pt'.format(experiment.seed)
     opt_config = experiment.configs.get('optimization', {})
@@ -265,8 +266,8 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
         with torch.no_grad():
             model.eval()
             for inputs, outputs in tqdm(test_loader, disable=not show_progress):
-                evaluate(model, outputs, inputs, output_scale, evaluator, experiment,
-                         'epoch_{}'.format(i_epoch), plot_outputs=plot_all)
+                evaluate(model, outputs, inputs, output_mean, output_scale, evaluator,
+                         experiment, 'epoch_{}'.format(i_epoch), plot_outputs=plot_all)
                 dump(str(i_epoch) + ' ' + evaluator.last + '\n', train_file, 'a+')
                 if evaluator['rmse'][-1] < best_rmse:
                     best_rmse = evaluator['rmse'][-1]
@@ -292,7 +293,7 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     # Evaluate Test set.
     model.eval()
     for inputs, outputs in tqdm(test_loader, disable=not show_progress):
-        evaluate(model, outputs, inputs, output_scale, evaluator,
+        evaluate(model, outputs, inputs, output_mean, output_scale, evaluator,
                  experiment, 'Test', plot_outputs=plot_outputs)
         dump('Test ' + evaluator.last + '\n', train_file, 'a+')
 
@@ -300,7 +301,7 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     train_set.sequence_length = test_set.sequence_length
     train_eval_loader = DataLoader(train_set, batch_size=batch_size, shuffle=False)
     for inputs, outputs in tqdm(train_eval_loader, disable=not show_progress):
-        evaluate(model, outputs, inputs, output_scale, evaluator,
+        evaluate(model, outputs, inputs, output_mean, output_scale, evaluator,
                  experiment, 'Train', plot_outputs=plot_outputs)
         dump('Train ' + evaluator.last + '\n', train_file, 'a+')
 
@@ -308,7 +309,8 @@ def train(model: SSM, optimizer: Optimizer, experiment: Experiment,
     return losses
 
 
-def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Tensor,
+def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor,
+             output_mean: Tensor, output_scale: Tensor,
              evaluator: Evaluator, experiment: Experiment, key: str,
              plot_outputs: bool = False) -> None:
     """Evaluate outputs."""
@@ -343,11 +345,15 @@ def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor, output_scale: Te
             transition = model.transitions
             x = torch.arange(-3, 1, 0.1)
             true_next_x = KinkFunction.f(x.numpy())
+
+            gp.eval()
+            x = (x - output_mean) / output_scale
             pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
             pred_next_x.loc += x
 
+            mu = output_scale * pred_next_x.loc[-1, -1] + output_mean
             fig = plot_transition(
-                x.numpy(), true_next_x, pred_next_x.loc[-1, -1].detach().numpy(),
+                x.numpy(), true_next_x, mu.detach().numpy(),
                 torch.diag(
                     pred_next_x.covariance_matrix[-1, -1]).sqrt().detach().numpy())
             fig.axes[0].set_title('{} {} Learned Function'.format(
