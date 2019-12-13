@@ -43,7 +43,7 @@ class Dataset(data.TensorDataset):
     def __init__(self, outputs: np.ndarray = np.empty((1,)),
                  inputs: np.ndarray = None,
                  sequence_length: int = None, sequence_stride: int = 1,
-                 split_idx: int = None,
+                 split_idx: int = None, normalize: bool = True,
                  data_dir: str = DATA_DIR, train: bool = True) -> None:
 
         assert outputs.ndim == 3, 'Outputs shape is [n_experiment, time, dim]'
@@ -74,8 +74,8 @@ class Dataset(data.TensorDataset):
         test_outputs = get_data_split(outputs, split_idx, train=False)
 
         # Store normalized inputs, outputs, states.
-        self.input_normalizer = Normalizer(train_inputs)
-        self.output_normalizer = Normalizer(train_outputs)
+        self.input_normalizer = Normalizer(train_inputs, normalize=normalize)
+        self.output_normalizer = Normalizer(train_outputs, normalize=normalize)
 
         if self.train:
             self.inputs = self.input_normalizer(train_inputs)
@@ -163,13 +163,14 @@ class Actuator(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'actuator.mat'))
 
         inputs = raw_data['u'][np.newaxis]
         outputs = raw_data['p'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -205,13 +206,14 @@ class BallBeam(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'ballbeam.dat'))
 
         inputs = raw_data[np.newaxis, :, 0, np.newaxis]
         outputs = raw_data[np.newaxis, :, 1, np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -246,13 +248,14 @@ class Drive(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'drive.mat'))
 
         inputs = raw_data['u1'][np.newaxis]
         outputs = raw_data['z1'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -288,13 +291,14 @@ class Dryer(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'dryer.dat'))
 
         inputs = raw_data[np.newaxis, :, 0, np.newaxis]
         outputs = raw_data[np.newaxis, :, 1, np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -330,13 +334,14 @@ class Flutter(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'flutter.dat'))
 
         inputs = raw_data[np.newaxis, :, 0, np.newaxis]
         outputs = raw_data[np.newaxis, :, 1, np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -371,6 +376,7 @@ class GasFurnace(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = np.loadtxt(os.path.join(data_dir, 'gas_furnace.csv'),
                               skiprows=1, delimiter=',')
@@ -378,7 +384,7 @@ class GasFurnace(Dataset):
         inputs = raw_data[np.newaxis, :, 0, np.newaxis]
         outputs = raw_data[np.newaxis, :, 1, np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -413,13 +419,14 @@ class Tank(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'tank.mat'))
 
         inputs = raw_data['u'].T[np.newaxis]
         outputs = raw_data['y'].T[np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -454,6 +461,7 @@ class Sarcos(Dataset):
     dim_inputs = 7
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'sarcos_inv.mat'))
         raw_data = raw_data['sarcos_inv']
@@ -467,7 +475,7 @@ class Sarcos(Dataset):
         inputs = subsampled_data[:, :, 21:28]
         outputs = subsampled_data[:, :, 0:7]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          split_idx=split_idx,
                          sequence_stride=sequence_stride, train=train)
@@ -499,13 +507,14 @@ class NonLinearSpring(Dataset):
     dim_inputs = 1
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'spring_nonlinear.mat'))
 
         inputs = raw_data['ds_u'][np.newaxis]
         outputs = raw_data['ds_y'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -536,6 +545,7 @@ class RoboMove(Dataset):
     dim_inputs = 2
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'robomove.mat'))
         split_idx = 25000
@@ -543,7 +553,8 @@ class RoboMove(Dataset):
         inputs = raw_data['ds_u'][np.newaxis]
         outputs = raw_data['ds_y'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs, split_idx=split_idx,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
+                         split_idx=split_idx,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -574,6 +585,7 @@ class RoboMoveSimple(Dataset):
     dim_inputs = 2
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = True,
                  sequence_length: int = None, sequence_stride: int = 1) -> None:
         raw_data = sio.loadmat(os.path.join(data_dir, 'robomove_simple.mat'))
         split_idx = 25000
@@ -581,7 +593,8 @@ class RoboMoveSimple(Dataset):
         inputs = raw_data['ds_u'][np.newaxis]
         outputs = raw_data['ds_y'][np.newaxis]
 
-        super().__init__(inputs=inputs, outputs=outputs, split_idx=split_idx,
+        super().__init__(inputs=inputs, outputs=outputs, normalize=normalize,
+                         split_idx=split_idx,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 
@@ -634,8 +647,9 @@ class KinkFunction(Dataset):
     dim_inputs = 0
 
     def __init__(self, data_dir: str = DATA_DIR, train: bool = True,
+                 normalize: bool = False,
                  sequence_length: int = None, sequence_stride: int = 1,
-                 trajectory_length: int = 120, x0: float = 0.5,
+                 trajectory_length: int = 40, x0: float = 0.5,
                  process_noise_sd: float = 0.05,
                  observation_noise_sd: float = 0.2) -> None:
 
@@ -659,7 +673,7 @@ class KinkFunction(Dataset):
             # states = raw_data['ds_x'][np.newaxis]
             outputs = raw_data['ds_y'][np.newaxis]
 
-        super().__init__(outputs=outputs,
+        super().__init__(outputs=outputs, normalize=normalize,
                          sequence_length=sequence_length,
                          sequence_stride=sequence_stride, train=train)
 

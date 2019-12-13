@@ -17,7 +17,7 @@ datasets = [
     (Sarcos, 60, 6, 337, 337, 7, 7, 0),
     (NonLinearSpring, 1, 1, 5000, 5000, 1, 1, 3),
     (Tank, 1, 1, 1250, 1250, 1, 2, 0),
-    (KinkFunction, 1, 1, 60, 60, 0, 1, 1)
+    (KinkFunction, 1, 1, 20, 20, 0, 1, 1)
 ]
 
 
@@ -31,7 +31,7 @@ def dataset(request):
     return request.param
 
 
-@pytest.fixture(params=[None, 1, 24])
+@pytest.fixture(params=[None, 1, 20])
 def sequence_length(request):
     return request.param
 

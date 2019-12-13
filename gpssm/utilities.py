@@ -346,7 +346,6 @@ def evaluate(model: SSM, outputs: Tensor, inputs: torch.Tensor,
             x = torch.arange(-3, 1, 0.1)
             true_next_x = KinkFunction.f(x.numpy())
 
-            gp.eval()
             x = (x - output_mean) / output_scale
             pred_next_x = transition(gp(x.expand(1, model.dim_states, -1)))
             pred_next_x.loc += x
