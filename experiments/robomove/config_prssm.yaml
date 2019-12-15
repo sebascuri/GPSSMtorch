@@ -2,9 +2,8 @@ experiment:
   name: robomove/PRSSM  # Experiment name.
   splits:
     - ['dataset', 'name']
-    - ['optimization', 'learning_rate']
     - ['model', 'forward', 'variational_distribution', 'kind']
-    - ['model', 'loss_factors', 'kl_u']
+    - ['model', 'recognition', 'kind']
 
 verbose: 2
 dataset:
@@ -15,11 +14,9 @@ dataset:
   sequence_stride: 50  # Stride of mini-batch sequence (useful for large datasets).
 
 optimization:
-  learning_rate:
-    - 0.001
-    - 0.01  # Learning rate of the optimizer (for now, Adam).
+  learning_rate: 0.01 # Learning rate of the optimizer (for now, Adam).
   batch_size: 32  # Batch size of each iteration.
-  num_epochs: 20  # Number of epochs to train the data.
+  num_epochs: 50  # Number of epochs to train the data.
   eval_length: 300
 
 model:
@@ -30,13 +27,15 @@ model:
   loss_key: 'elbo'  # This string identifies which loss to use.
   k_factor: 1 # This is the soft conditioning factor.
   loss_factors:  # These factors multiply each term of the ELBO.
-    kl_u:
-      - 0.1
-      - 0.01
+    kl_u: 0.01
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
   recognition:
     length: 50  # Length of recognition sequence.
-    kind: 'lstm'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
+    kind:
+      - 'lstm'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
+      - 'conv'
+      - 'bi-lstm'
+      - 'output'
     variance: 0.01  # Initial variance estimate.
   emissions:
     variance: 1.0  # Initial variance estimate.
@@ -52,7 +51,7 @@ model:
       outputscale: 0.01  # Initial variance estimate.
       lengthscale: 2.0  # Initial lengthscale estimate.
     inducing_points:
-      number_points: 50  # Number of inducing points per (GP).
+      number_points: 100  # Number of inducing points per (GP).
       strategy: 'uniform'  # Initialization strategies: normal, uniform, or linspace.
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.

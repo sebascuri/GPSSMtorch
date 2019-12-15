@@ -42,12 +42,10 @@ model:
       kind: 'zero'  # Strategies: zero, constant, linear.
     kernel:
       shared: True  # Shared parameters between components flag.
-      kind: 'rbf'  # Strategies: rbf, matern 1/2, matern 3/2, matern 5/2, linear
-      ard_num_dims:  # Number of ard dimensions. if empty will automatically select dim_states + dim_inputs.
-      outputscale: 0.1  # Initial variance estimate.
-      lengthscale: 2.0  # Initial lengthscale estimate.
+      kind: 'matern32'  # Strategies: rbf, matern 1/2, matern 3/2, matern 5/2, linear
+      outputscale: 0.1
     inducing_points:
-      number_points: 40  # Number of inducing points per (GP).
+      number_points: 100  # Number of inducing points per (GP).
       strategy: 'uniform'  # Initialization strategies: normal, uniform, or linspace.
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.

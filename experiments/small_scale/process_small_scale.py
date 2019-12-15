@@ -58,14 +58,13 @@ def process_method(method, datasets, keys, seeds):
         min_loss = float('inf')
         min_key = None
         for key in losses[dataset]:
-            if np.mean(losses[dataset][key]['rmse']['last']) < min_loss:
+            if -np.mean(losses[dataset][key]['log-lik']['test']) < min_loss:
                 min_key = key
-                min_loss = np.mean(losses[dataset][key]['rmse']['last'])
+                min_loss = -np.mean(losses[dataset][key]['log-lik']['last'])
         rmse = losses[dataset][min_key]['rmse']['test']
         loglik = losses[dataset][min_key]['log-lik']['test']
-        print(min_key,
-              np.mean(rmse), np.std(rmse, ddof=1),
-              np.mean(loglik), np.std(loglik, ddof=1)
+        print(min_key, '{:.3} ({:.2})'.format(np.mean(rmse), np.std(rmse, ddof=1)),
+              '{:.3} ({:.2})'.format(-np.mean(loglik), np.std(loglik, ddof=1))
               )
 
 
@@ -77,13 +76,13 @@ k_us = ['0.1', '0.01', '0.05']
 k_factors = ['1', '10', '50']
 
 process_method('CBFSSM', datasets, list(product(
-    ['delta', 'full', 'mean', 'sample'],
-    # ['0.1', '0.01', '0.05'],
-    ['0.05'],
-    ['1'],
-    # ['1', '10', '50']
+    ['sample', 'delta', 'full', 'mean'],
+    # ['sample'],
+    ['0.1', '0.01', '0.05'],
+    ['1', '10', '50'],
+    # ['50']
 )),
-               [0, 1, 2, 3, 4])
+               [0, 1, 2])
 process_method('VCDT', datasets, list(product(
     ['sample'],
     # [ sample, 'mean', 'delta'],

@@ -64,23 +64,21 @@ def process_method(method, keys, seeds):
             min_loss = np.mean(losses[key]['rmse']['test'])
     rmse = losses[min_key]['rmse']['test']
     loglik = losses[min_key]['log-lik']['test']
-    print(min_key,
-          np.mean(rmse), np.std(rmse, ddof=1),
-          np.mean(loglik), np.std(loglik, ddof=1)
+    print(min_key, '{:.3} ({:.2})'.format(np.mean(rmse), np.std(rmse, ddof=1))
           )
 
 
 process_method('CBFSSM', list(product(
-    ['full', 'sample', 'mean', 'delta'],
+    ['full'], #, 'sample', 'mean', 'delta'],
     ['0.01'],  # ['0.01', '0.001'],
     ['10'],  # ['5', '10'],
     ['0.01'],  # ['0.1', '0.01', '1.0'],
-    ['1.0', '10.0', '50.0'],  # ['1.0', '10.0', '50.0']
+    ['1.0'],  # ['1.0', '10.0', '50.0']
 )),
                [0, 1, 2] #, 3, 4]
 )
 process_method('VCDT', list(product(
-    ['sample', 'mean', 'delta'],
+    ['sample'], #, 'mean', 'delta'],
     ['0.01'],  # ['0.01', '0.001'],
     ['10'],  # ['5', '10'],
     ['0.1'],  # ['0.1', '0.01', '1.0'],
