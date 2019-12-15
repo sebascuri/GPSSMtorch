@@ -74,35 +74,40 @@ if __name__ == "__main__":
     else:
         configs = {'experiment': {'name': 'experiments/sample/'},
                    'verbose': 2,
-                   'model': {'dim_states': 4,
-                             'num_particles': 50,
-                             'loss_factors': {'kl_u': .5, 'kl_conditioning': 1.},
-                             'recognition': {'kind': 'conv', 'length': 16,
-                                             'variance': 0.1 ** 2},
+                   'model': {'dim_states': 1,
+                             'independent_particles': True,
+                             'num_particles': 100,
+                             'loss_key': 'elbo',
+                             'loss_factors': {'kl_u': .1, 'kl_conditioning': 1.},
+                             'recognition': {'kind': 'conv', 'length': 20,
+                                             'learnable': True,
+                                             'variance': 0.004},
                              'forward': {
                                  'mean': {'kind': 'zero'},
                                  'kernel': {'shared': True,
-                                            'outputscale': .5 ** 2,
-                                            'lengthscale': 2.},
+                                            'kind': 'matern32',
+                                            'outputscale': 0.5,
+                                            'lengthscale': 2.0
+                                            },
                                  'inducing_points': {
-                                     'strategy': 'uniform',
-                                     'scale': 4.0,
-                                     'learnable': True,
+                                     'strategy': 'normal',
+                                     'scale': 2.0,
+                                     'learnable': False,
                                      'number_points': 20},
                                  'variational_distribution': {
-                                     'mean': 0.05 ** 2,
-                                     'variance': 0.01 ** 2,
+                                     'kind': 'mean',
+                                     # 'learn_mean': False,
                                  }
                              },
-                             'emissions': {'variance': 1., 'learnable': True},
-                             'transitions': {'variance': 0.002 ** 2, 'learnable': True}
+                             'emissions': {'variance':  0.04, 'learnable': True},
+                             'transitions': {'variance': 0.0025, 'learnable': True}
                              },
-                   'dataset': {'sequence_length': 50},
-                   'optimization': {'learning_rate': 0.005,
-                                    'batch_size': 10,
-                                    'num_epochs': 50}
+                   'dataset': {'sequence_length': 20},
+                   'optimization': {'learning_rate': 0.1,
+                                    'batch_size': 1,
+                                    'num_epochs': 200}
                    }
-        model_ = 'PRSSM'
-        dataset_ = 'Actuator'
+        model_ = 'VCDT'
+        dataset_ = 'KinkFunction'
 
     main(Experiment(model_, dataset_, args.seed, configs), args.num_threads)
