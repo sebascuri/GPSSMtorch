@@ -35,9 +35,15 @@ def get_data_split(array: np.ndarray, split_idx: int = None, train: bool = True
         split_idx = array.shape[1] // 2
 
     if train:
-        array = array[:, :split_idx, :]
+        if array.shape[0] > split_idx:  # Experiment split.
+            array = array[:split_idx, :, :]
+        else:  # Trajectory split.
+            array = array[:, :split_idx, :]
     else:
-        array = array[:, split_idx:, :]
+        if array.shape[0] > split_idx:
+            array = array[split_idx:, :, :]
+        else:
+            array = array[:, split_idx:, :]
 
     return array
 
@@ -177,15 +183,19 @@ class Normalizer(object):
         Array with dimensions [n_sequences x sequence_length x dimension].
     """
 
-    def __init__(self, array: np.ndarray) -> None:
+    def __init__(self, array: np.ndarray, normalize: bool = True) -> None:
         assert array.ndim == 3, """Array must have 3 dimensions"""
         dim = array.shape[2]
 
-        self.mean = np.mean(array, axis=(0, 1))
-        self.sd = np.std(array, axis=(0, 1))
+        if normalize:
+            self.mean = np.mean(array, axis=(0, 1))
+            self.sd = np.std(array, axis=(0, 1))
+        else:
+            self.mean = np.zeros((dim,))
+            self.sd = np.ones((dim,))
 
         if np.all(self.sd == 0.):  # This is for constant sequences.
-            self.sd = np.ones((dim, ))
+            self.sd = np.ones((dim,))
 
         assert self.mean.shape == (dim,)
         assert self.sd.shape == (dim,)

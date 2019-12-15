@@ -1,6 +1,6 @@
 """Emission model for GPSSM's."""
 from torch import Tensor
-from torch.distributions import Normal
+from gpytorch.distributions import MultivariateNormal
 from .utilities import inverse_softplus, safe_softplus
 import torch
 import torch.nn as nn
@@ -40,8 +40,8 @@ class Emissions(nn.Module):
         """Get Diagonal Covariance Matrix."""
         return safe_softplus(self.variance_t)
 
-    def forward(self, *args: Tensor, **kwargs) -> Normal:
-        """Compute the conditional distribution of the emissions p(y|f).
+    def forward(self, *args: MultivariateNormal, **kwargs) -> MultivariateNormal:
+        """Compute the marginal distribution p(y).
 
         Parameters
         ----------
@@ -54,8 +54,16 @@ class Emissions(nn.Module):
             Output of dimension batch_size x dim_output x num_particles.
         """
         state = args[0]
-        batch_size, _, num_particles = state.shape
-        loc = state[:, :self.dim_outputs]
+        if type(state) == Tensor:
+            batch_size, _, num_particles = state.shape
+            loc = state[:, :self.dim_outputs]
+
+        else:
+            batch_size, dim_states, num_particles = state.loc.shape
+            loc = state.loc[:, :self.dim_outputs]
+
         cov = self.variance.expand(batch_size, num_particles, self.dim_outputs
                                    ).transpose(1, 2)
-        return Normal(loc, cov)
+        cov = torch.diag_embed(cov)
+
+        return MultivariateNormal(loc, cov)

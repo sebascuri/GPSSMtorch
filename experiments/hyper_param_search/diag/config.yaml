@@ -1,49 +1,55 @@
 experiment:
-  name: experiments/test/
-verbose: 2
+  name: hyper_param_search/diag  # Experiment name.
+  splits:
+    - ['model', 'name']
+    - ['model', 'independent_particles']
 
+verbose: 0
 dataset:
-  sequence_length: 20  # Length of training mini-batch sequence.
+  name: Actuator
+  sequence_length: 50  # Length of training mini-batch sequence.
   sequence_stride: 1  # Stride of mini-batch sequence (useful for large datasets).
 
 optimization:
-  learning_rate: 0.05  # Learning rate of the optimizer (for now, Adam).
-  batch_size: 32  # Batch size of each itertion.
-  num_epochs: 1  # Number of epochs to train the data.
-  curriculum: False # Flag that indicates if there is a curriculum.
-
-
-evaluation:
-  plots: ['training_loss', 'prediction']
-  length: []  # Here add extra evaluation lengths.
+  learning_rate: 0.005
+  batch_size: 10
+  num_epochs: 50  # Number of epochs to train the data.
 
 model:
-  dim_states: 4  #
+  name:
+    - 'PRSSM'
+    - 'CBFSSM'
+    - 'VCDT'
+  dim_states: 4  # Number of internal states.
   num_particles: 50
-  loss_key: 'elbo'  # This string identifies which loss to use:
+  # Number of particles for forwards/backwards sampling.
+  loss_key: 'elbo'  # This string identifies which loss to use.
+  k_factor: 1 # This is the soft conditioning factor.
+  independent_particles:
+    - True
+    - False
   loss_factors:  # These factors multiply each term of the ELBO.
-    kl_u: 1.0  # KL-divergence of the variational distribution (with prior) of the forward model factor.
+    kl_u: 0.5
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
-    entropy: 0.0  # Entropy of the backwards model prior.
   recognition:
-    length: 1  # Length of recognition sequence.
-    kind: 'output'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
+    length: 16  # Length of recognition sequence.
+    kind: 'conv'
     variance: 0.01  # Initial variance estimate.
     learnable: True  # Learnable parameters flag.
   emissions:
-    variance: 0.1   # Initial variance estimate.
+    variance: 1.0   # Initial variance estimate.
     learnable: True # Learnable parameters flag.
   transitions:
-    variance: 0.0002  # Initial variance estimate.
+    variance: 0.000004  # Initial variance estimate.
     learnable: True  # Learnable parameters flag.
-  forward:
+  forward:  # If backwards is empty, it will make a copy of the same GP for the backwards pass.
     mean:
       kind: 'zero'  # Strategies: zero, constant, linear.
     kernel:
-      shared: True  # Shared parameters between components flag.
+      shared: True
       kind: 'rbf'  # Strategies: rbf, matern 1/2, matern 3/2, matern 5/2, linear
       ard_num_dims:  # Number of ard dimensions. if empty will automatically select dim_states + dim_inputs.
-      outputscale: 0.25  # Initial variance estimate.
+      outputscale: 0.25
       lengthscale: 2.0  # Initial lengthscale estimate.
       learn_outputscale: True  # Learnable parameters flag.
       learn_lengthscale: True  # Learnable parameters flag.
@@ -53,8 +59,8 @@ model:
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.
     variational_distribution:
-      kind: 'full'
+      kind: 'full'  # Strategies: full, mean, sample, delta
+      mean: 0.0025
+      variance: 0.0001
       learn_mean: True  # Learnable parameters flag.
-      mean: 0.0025  # Initial mean estimate.
       learn_var: True # Learnable parameters flag.
-      variance: 0.001  # Initial variance estimate.

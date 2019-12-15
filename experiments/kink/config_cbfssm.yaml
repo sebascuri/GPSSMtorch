@@ -1,0 +1,64 @@
+experiment:
+  name: kink/CBFSSM  # Experiment name.
+  splits:
+    - ['model', 'forward', 'variational_distribution', 'kind']
+    - ['model', 'loss_factors', 'kl_u']
+    - ['model', 'k_factor']
+
+verbose: 2
+dataset:
+  name: KinkFunction
+  sequence_length: 60  # Length of training mini-batch sequence.
+  sequence_stride: 1  # Stride of mini-batch sequence (useful for large datasets).
+
+optimization:
+  learning_rate: 0.001  # Learning rate of the optimizer (for now, Adam).
+  batch_size: 1  # Batch size of each iteration.
+  num_epochs: 3000  # Number of epochs to train the data.
+
+model:
+  name: 'CBFSSM'
+  dim_states: 1  # Number of internal states.
+  num_particles: 100  # Number of particles for forwards/backwards sampling.
+  independent_particles: True
+  loss_key: 'elbo'  # This string identifies which loss to use.
+  k_factor: # This is the soft conditioning factor.
+    - 1
+    - 10
+    - 50
+  loss_factors:  # These factors multiply each term of the ELBO.
+    kl_u:
+      - 0.1
+      - 0.01
+    kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
+  recognition:
+    length: 60  # Length of recognition sequence.
+    kind: 'lstm'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
+    variance: 0.01  # Initial variance estimate.
+  emissions:
+    variance: 0.04  # Initial variance estimate.
+    learnable: False
+  transitions:
+    variance: 0.0025  # Initial variance estimate.
+    learnable: False
+  forward:  # If backwards is empty, it will make a copy of the same GP for the backwards pass.
+    mean:
+      kind: 'zero'  # Strategies: zero, constant, linear.
+    kernel:
+      shared: True  # Shared parameters between components flag.
+      kind: 'matern32'  # Strategies: rbf, matern 1/2, matern 3/2, matern 5/2, linear
+      ard_num_dims:  # Number of ard dimensions. if empty will automatically select dim_states + dim_inputs.
+      outputscale: 0.1  # Initial variance estimate.
+    inducing_points:
+      number_points: 100  # Number of inducing points per (GP).
+      strategy: 'uniform'  # Initialization strategies: normal, uniform, or linspace.
+      scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
+      learnable: True  # Learnable parameters flag.
+    variational_distribution:
+      kind:
+        - sample
+        - full
+        - delta
+        - mean
+      mean: 0.0025
+      variance: 0.0001

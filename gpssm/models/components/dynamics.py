@@ -9,10 +9,14 @@ from gpytorch.likelihoods import Likelihood
 from gpytorch.means import Mean
 from gpytorch.kernels import Kernel
 from gpytorch.models import AbstractVariationalGP, ExactGP
-from .variational import VariationalStrategy, ApproxCholeskyVariationalDistribution
+from .variational import VariationalStrategy
+from .variational import ApproxCholeskyVariationalDistribution as AppCholVaDi
+from .variational import CholeskyMeanVariationalDistribution as CholMeanVaDi
+from .variational import DeltaVariationalDistribution as DeltaVaDi
+from .variational import CholeskySampleVariationalDistribution as CholSamVaDi
 
 __author__ = 'Sebastian Curi'
-__all__ = ['Dynamics', 'IdentityDynamics',
+__all__ = ['Dynamics', 'ZeroDynamics',
            'GPDynamics', 'ExactGPModel', 'VariationalGP']
 
 
@@ -39,6 +43,15 @@ class Dynamics(ABC):
         """Get the KL-Divergence of the Model with the Prior."""
         return torch.tensor(0.0)
 
+    @property
+    def independent(self):
+        """Return true if the function calls are independent of each other."""
+        return True
+
+    def resample(self):
+        """Resample the variational distribution approximation points."""
+        pass
+
 
 class NNDynamics(nn.Module, Dynamics):
     """GPDynamics is a Dynamical model defined over GPs.
@@ -58,17 +71,15 @@ class NNDynamics(nn.Module, Dynamics):
         return ""
 
 
-class IdentityDynamics(NNDynamics):
-    """Dynamics that returns the same state."""
+class ZeroDynamics(NNDynamics):
+    """Dynamics that returns a zero next state."""
 
     def forward(self, *args: Tensor, **kwargs) -> MultivariateNormal:
         """Call a Dynamical System at a given state-input pair."""
         state_input = args[0]
         batch_size, _, num_particles = state_input.shape
-        state_input = args[0]
-        loc = state_input[:, :self.num_outputs, :]
-        scale = 1 * torch.ones(self.num_outputs).expand(batch_size, num_particles, -1
-                                                        ).transpose(-1, -2)
+        loc = torch.zeros(batch_size, self.num_outputs, num_particles)
+        scale = torch.ones(batch_size, self.num_outputs, num_particles)
         cov = torch.diag_embed(scale)
 
         return MultivariateNormal(loc, cov)
@@ -244,11 +255,11 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
                  mean: Mean,
                  kernel: Kernel,
                  learn_inducing_loc: bool = True,
-                 variational_distribution: ApproxCholeskyVariationalDistribution = None
+                 variational_distribution: AppCholVaDi = None
                  ) -> None:
         if variational_distribution is None:
             batch_k, num_inducing, input_dims = inducing_points.shape
-            variational_distribution = ApproxCholeskyVariationalDistribution(
+            variational_distribution = AppCholVaDi(
                 num_inducing_points=num_inducing,
                 batch_size=batch_k
             )
@@ -280,4 +291,12 @@ class VariationalGP(AbstractVariationalGP, GPDynamics):
 
     def kl_divergence(self) -> Tensor:
         """Get the KL-Divergence of the Model."""
-        return self.variational_strategy.kl_divergence().sum()
+        return self.variational_strategy.kl_divergence().sum(dim=1).mean()
+
+    @property
+    def independent(self):
+        """Return true if the function calls are independent of each other."""
+        type_var_dist = type(self.variational_strategy.variational_distribution)
+        return not (type_var_dist is CholMeanVaDi
+                    or type_var_dist is DeltaVaDi
+                    or type_var_dist is CholSamVaDi)

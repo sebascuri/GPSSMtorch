@@ -82,7 +82,7 @@ class VariationalStrategy(Module):
         """
         out = self.model.forward(self.inducing_points)
         res = MultivariateNormal(
-            out.mean, out.lazy_covariance_matrix.add_jitter()
+            out.mean,  out.lazy_covariance_matrix.add_jitter()
         )
         return res
 

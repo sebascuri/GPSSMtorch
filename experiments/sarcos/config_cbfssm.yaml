@@ -1,30 +1,41 @@
 experiment:
-  name: sarcos/PRSSM
+  name: sarcos/CBFSSM
   splits:
+    - ['model', 'forward', 'variational_distribution', 'kind']
+    - ['optimization', 'learning_rate']
+    - ['optimization', 'batch_size']
     - ['model', 'loss_factors', 'kl_u']
+    - ['model', 'k_factor']
 
 verbose: 2
 dataset:
   name: Sarcos
-  sequence_length: 250
+  sequence_length: 100
   sequence_stride: 10
 
 optimization:
-  learning_rate: 0.01
-  batch_size: 5
-  num_epochs: 25
-  eval_length: 100
+  learning_rate:
+    - 0.01
+    - 0.001
+  batch_size:
+    - 5
+    - 10
+  num_epochs: 10
 
 model:
-  name: 'PRSSM'
+  name: 'CBFSSM'
   dim_states: 14
   num_particles: 50
   loss_key: 'elbo'
-  k_factor: 1.0  # This is the soft conditioning factor.
+  k_factor:
+    - 1
+    - 10
+    - 50
   loss_factors:  # These factors multiply each term of the ELBO.
     kl_u:
-      - 0.5
+      - 1.0
       - 0.1
+      - 0.01
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
     entropy: 0.0  # Entropy of the backwards model predictions.
   recognition:
@@ -53,6 +64,10 @@ model:
       scale: 6.0
       learnable: True
     variational_distribution:
-      kind: full
+      kind:
+        - sample
+        - full
+        - delta
+        - mean
       mean: 0.0025
       variance: 0.0001
