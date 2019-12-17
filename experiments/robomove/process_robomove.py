@@ -6,27 +6,32 @@ from itertools import product
 
 SPLITS = ['test', 'train', 'last']
 
-
 def parse_file(file_name):
     """Parse a file."""
     with open(file_name) as file:
         data = file.readlines()
-    test = data[-2].split('. ')
-    train = data[-1].split('. ')
-    last_epoch = data[-3].split('. ')
 
-    test[0] = 'L' + test[0].split(' L')[1]
-    train[0] = 'L' + train[0].split(' L')[1]
-    last_epoch[0] = 'L' + last_epoch[0].split(' L')[1]
+    results = {split: {'log-lik': [], 'nrmse': [], 'rmse': []} for split in SPLITS}
+    min_val = 0
 
+    for line in reversed(data):
+        data_line = line.split('. ')
+        split = data_line[0].split(' ')[0]
+        data_line[0] = 'L' + data_line[0].split(' L')[1]
 
-    results = {}
-    for split, value in zip(SPLITS, [test, train, last_epoch]):
-        results[split] = {}
-        for key_val in value:
+        for key_val in data_line:
             key, val = key_val.split(':')
-            results[split][key.lower()] = float(val)
-    return results
+
+            if split.lower() == 'train':
+                results['train'][key.lower()].append(float(val))
+            elif split.lower() == 'test':
+                results['test'][key.lower()].append(float(val))
+            else:
+                val = int(split)
+                if val < min_val:
+                    return results
+                min_val = val
+                results['last'][key.lower()].append(float(val))
 
 
 def process_method(method, datasets, keys, seeds):
@@ -58,9 +63,11 @@ def process_method(method, datasets, keys, seeds):
         min_loss = float('inf')
         min_key = None
         for key in losses[dataset]:
-            if np.mean(losses[dataset][key]['rmse']['last']) < min_loss:
+            if losses[dataset][key]['rmse']['test'] == [[]]:
+                continue
+            if np.mean(losses[dataset][key]['rmse']['test']) < min_loss:
                 min_key = key
-                min_loss = np.mean(losses[dataset][key]['rmse']['last'])
+                min_loss = np.mean(losses[dataset][key]['rmse']['test'])
         rmse = losses[dataset][min_key]['rmse']['test']
         loglik = losses[dataset][min_key]['log-lik']['test']
         print(min_key,
@@ -71,31 +78,22 @@ def process_method(method, datasets, keys, seeds):
 
 # def process_method(method_name, datasets, var_dists, k_us, k_factor):
 
-datasets = ['Actuator', 'BallBeam', 'Drive', 'Dryer', 'GasFurnace', 'Flutter', 'Tank']
+datasets = ['RobomoveSimple', 'Robomove']
 var_dists = ['full', 'delta', 'full', 'mean', 'sample']
-k_us = ['0.1', '0.01', '0.05']
 k_factors = ['1', '10', '50']
 
 process_method('CBFSSM', datasets, list(product(
     ['delta', 'full', 'mean', 'sample'],
-    # ['0.1', '0.01', '0.05'],
-    ['0.05'],
-    ['1'],
-    # ['1', '10', '50']
-)),
-               [0, 1, 2, 3, 4])
+    ['bi-lstm', 'conv', 'lstm'],  #, 'output'],
+    ['1', '10', '50'],
+)), [0])
+
 process_method('VCDT', datasets, list(product(
-    ['sample'],
-    # [ sample, 'mean', 'delta'],
-    ['0.1'],
-    # ['0.1', '0.01', '0.05'],
-    )),
-            [0, 1, 2, 3, 4]
-               )
+    ['delta', 'mean', 'sample'],
+    ['bi-lstm', 'conv', 'lstm'],  #, 'output'],
+)), [0])
 
 process_method('PRSSM', datasets, list(product(
-    ['full'], #, 'mean', 'delta'],
-    ['0.1'] #, '0.01', '0.05']
-    )),
-               [0, 1, 2, 3, 4]
-               )
+    ['full', 'mean'],
+    ['bi-lstm', 'conv', 'lstm'], #, 'output'],
+)), [0])
