@@ -2,22 +2,26 @@ experiment:
   name: robomove/CBFSSM  # Experiment name.
   splits:
     - ['dataset', 'name']
-    - ['model', 'forward', 'variational_distribution', 'kind']
-    - ['model', 'recognition', 'kind']
-    - ['model', 'k_factor']
+    - ['dataset', 'sequence_length']
 
 verbose: 2
 dataset:
   name:
     - Robomove
     - RobomoveSimple
-  sequence_length: 300  # Length of training mini-batch sequence.
+  sequence_length:
+    - 5
+    - 10
+    - 50
+    - 150
+    - 200
+    - 300
   sequence_stride: 50  # Stride of mini-batch sequence (useful for large datasets).
 
 optimization:
   learning_rate: 0.01
   batch_size: 32  # Batch size of each iteration.
-  num_epochs: 100  # Number of epochs to train the data.
+  num_epochs: 80  # Number of epochs to train the data.
   eval_length: 300
 
 model:
@@ -26,20 +30,13 @@ model:
   num_particles: 50  # Number of particles for forwards/backwards sampling.
   independent_particles: True
   loss_key: 'elbo'  # This string identifies which loss to use.
-  k_factor: # This is the soft conditioning factor.
-    - 1
-    - 10
-    - 50
+  k_factor: 10 # This is the soft conditioning factor.
   loss_factors:  # These factors multiply each term of the ELBO.
     kl_u: 0.01
     kl_conditioning: 1
   recognition:
     length: 50  # Length of recognition sequence.
-    kind:
-      - 'lstm'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
-      - 'conv'
-      - 'bi-lstm'
-      - 'output'
+    kind: 'conv'
     variance: 0.01  # Initial variance estimate.
   emissions:
     variance: 1.0  # Initial variance estimate.
@@ -60,10 +57,6 @@ model:
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.
     variational_distribution:
-      kind:
-        - sample
-        - full
-        - delta
-        - mean
+      kind: 'full'
       mean: 0.0025
       variance: 0.0001
