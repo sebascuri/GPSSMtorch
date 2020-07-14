@@ -23,7 +23,7 @@ def plot_loss(losses: Union[Iterable, dict], ylabel: str = 'Losses') -> plt.Figu
 
     """
     fig, ax = plt.subplots()
-    if isinstance(losses, Union[np.ndarray, list]):
+    if isinstance(losses, np.ndarray) or isinstance(losses, list):
         ax.plot(losses)
     elif isinstance(losses, dict):
         for key, loss in losses.items():
