@@ -67,7 +67,9 @@ def plot_pred(pred_mean: np.ndarray, pred_std: np.ndarray = None,
     return fig
 
 
-def plot_2d(pred_mean: np.ndarray, true_outputs: Optional[np.ndarray] = None) -> plt.Figure:
+def plot_2d(
+        pred_mean: np.ndarray, true_outputs: Optional[np.ndarray] = None
+) -> plt.Figure:
     """Plot predictions made by the model in 2d.
 
     Parameters
@@ -94,7 +96,9 @@ def plot_2d(pred_mean: np.ndarray, true_outputs: Optional[np.ndarray] = None) ->
 
     fig, ax = plt.subplots()
     if true_outputs is not None:
-        ax.plot(true_outputs[0], true_outputs[1], color=TRUE_COLOR, label='Ground Truth')
+        ax.plot(
+            true_outputs[0], true_outputs[1], color=TRUE_COLOR, label='Ground Truth'
+        )
     ax.plot(pred_mean[0], pred_mean[1], color=PRED_COLOR, label='Predicted Output')
 
     if legend:
