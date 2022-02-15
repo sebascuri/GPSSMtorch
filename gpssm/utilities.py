@@ -125,11 +125,11 @@ class Evaluator(dict):
         return l2.sqrt().mean().item()
 
 
-_experiment = namedtuple('Experiment',
+experiment_ = namedtuple('experiment_',
                          ['model', 'dataset', 'seed', 'configs', 'log_dir', 'fig_dir'])
 
 
-class Experiment(_experiment):
+class Experiment(experiment_):
     """Experiment Named Tuple."""
 
     def __new__(cls, model: str, dataset: str, seed: int, configs: dict = None,

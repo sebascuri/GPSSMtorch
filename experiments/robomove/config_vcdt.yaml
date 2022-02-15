@@ -2,15 +2,20 @@ experiment:
   name: robomove/VCDT  # Experiment name.
   splits:
     - ['dataset', 'name']
-    - ['model', 'forward', 'variational_distribution', 'kind']
-    - ['model', 'recognition', 'kind']
+    - ['dataset', 'sequence_length']
 
 verbose: 2
 dataset:
   name:
     - Robomove
     - RobomoveSimple
-  sequence_length: 300  # Length of training mini-batch sequence.
+  sequence_length:
+    - 5
+    - 10
+    - 50
+    - 150
+    - 200
+    - 300
   sequence_stride: 50  # Stride of mini-batch sequence (useful for large datasets).
 
 optimization:
@@ -31,11 +36,7 @@ model:
     kl_conditioning: 1.0 # KL-divergence of the conditioning step (prediction vs. conditioning).
   recognition:
     length: 50  # Length of recognition sequence.
-    kind:
-      - 'lstm'  # Strategies: output, zero, nn, conv, lstm, bi-lstm.
-      - 'conv'
-      - 'bi-lstm'
-      - 'output'
+    kind: 'conv'
     variance: 0.01  # Initial variance estimate.
   emissions:
     variance: 1.0  # Initial variance estimate.
@@ -56,9 +57,6 @@ model:
       scale: 4.0  # Scale of initialization (it will be centered around 0, hence for [-1, 1] set scale = 2).
       learnable: True  # Learnable parameters flag.
     variational_distribution:
-      kind:
-        - sample
-        - delta
-        - mean
+      kind: 'mean'
       mean: 0.0025
       variance: 0.0001
