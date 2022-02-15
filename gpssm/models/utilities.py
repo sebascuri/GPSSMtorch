@@ -278,11 +278,11 @@ def _parse_inducing_points(dim_inputs: int, dim_outputs: int = 1,
         ip = scale * torch.rand((dim_outputs, number_points, dim_inputs)) - (scale / 2)
     elif strategy == 'linspace':
         lin_points = int(np.ceil(number_points ** (1 / dim_inputs)))
-        ip = np.linspace(-scale, scale, lin_points)
-        ip = np.array(np.meshgrid(*([ip] * dim_inputs))).reshape(dim_inputs, -1).T
-        idx = np.random.choice(np.arange(ip.shape[0]), size=number_points,
+        ip_ = np.linspace(-scale, scale, lin_points)
+        ip_ = np.array(np.meshgrid(*([ip_] * dim_inputs))).reshape(dim_inputs, -1).T
+        idx = np.random.choice(np.arange(ip_.shape[0]), size=number_points,
                                replace=False)
-        ip = torch.from_numpy(ip[idx]).float().repeat(dim_outputs, 1, 1)
+        ip = torch.from_numpy(ip_[idx]).float().repeat(dim_outputs, 1, 1)
     else:
         raise NotImplementedError("inducing point {} not implemented.".format(strategy))
     assert ip.shape == torch.Size([dim_outputs, number_points, dim_inputs])

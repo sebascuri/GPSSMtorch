@@ -66,14 +66,14 @@ def plot_pred(pred_mean: np.ndarray, pred_std: np.ndarray = None,
     return fig
 
 
-def plot_2d(pred_mean: np.ndarray, true_outputs: np.ndarray = None) -> plt.Figure:
+def plot_2d(pred_mean: np.ndarray, true_outputs: Optional[np.ndarray] = None) -> plt.Figure:
     """Plot predictions made by the model in 2d.
 
     Parameters
     ----------
     pred_mean: np.ndarray.
         Predicted mean of shape [dim_outputs, time].
-    true_outputs: np.ndarray, optional.
+    true_outputs: np.ndarray.
         True outputs of shape [dim_outputs, time].
 
     Returns
@@ -92,7 +92,8 @@ def plot_2d(pred_mean: np.ndarray, true_outputs: np.ndarray = None) -> plt.Figur
         """
 
     fig, ax = plt.subplots()
-    ax.plot(true_outputs[0], true_outputs[1], color=TRUE_COLOR, label='Ground Truth')
+    if true_outputs is not None:
+        ax.plot(true_outputs[0], true_outputs[1], color=TRUE_COLOR, label='Ground Truth')
     ax.plot(pred_mean[0], pred_mean[1], color=PRED_COLOR, label='Predicted Output')
 
     if legend:
@@ -102,7 +103,7 @@ def plot_2d(pred_mean: np.ndarray, true_outputs: np.ndarray = None) -> plt.Figur
     return fig
 
 
-def plot_transition(state: np.ndarray, true_next_state: np.array,
+def plot_transition(state: np.ndarray, true_next_state: np.ndarray,
                     pred_next_state_mu: np.ndarray, pred_next_state_std: np.ndarray,
                     sigmas: float = 3.) -> plt.Figure:
     """Plot the predicted transition function from samples.
